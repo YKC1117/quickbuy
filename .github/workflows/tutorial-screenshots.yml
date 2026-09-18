@@ -43,16 +43,16 @@ jobs:
           await page.reload({waitUntil:'networkidle'});
           const onboarding=page.locator('#mobileOnboarding');
           await onboarding.waitFor({state:'visible'});
-          await page.screenshot({path:'docs/tutorial/01-first-open.png',fullPage:true});
+          await page.screenshot({path:'docs/tutorial/01-first-open.png',fullPage:false,animations:'disabled',caret:'hide',timeout:15000});
 
           await page.locator('#mobileOnboardingDoneBtn').click();
           await page.locator('[data-mobile-view="home"]').waitFor({state:'visible'});
-          await page.screenshot({path:'docs/tutorial/02-home.png',fullPage:true});
+          await page.screenshot({path:'docs/tutorial/02-home.png',fullPage:false,animations:'disabled',caret:'hide',timeout:15000});
 
           await page.locator('[data-mobile-tab="platforms"]').click();
           await page.locator('[data-mobile-view="platforms"]').waitFor({state:'visible'});
           await page.locator('#platformSearch').fill('拓元');
-          await page.screenshot({path:'docs/tutorial/03-platform.png',fullPage:true});
+          await page.screenshot({path:'docs/tutorial/03-platform.png',fullPage:false,animations:'disabled',caret:'hide',timeout:15000});
 
           const first=page.locator('#platformQuickPick button:visible, #ticketPlatformQuickPick button:visible').first();
           await first.click();
@@ -62,11 +62,11 @@ jobs:
           await page.locator('#mobileKeyword').blur();
           await page.locator('#mobileQtyPlus').click();
           await page.waitForTimeout(300);
-          await page.screenshot({path:'docs/tutorial/04-prep.png',fullPage:true});
+          await page.screenshot({path:'docs/tutorial/04-prep.png',fullPage:false,animations:'disabled',caret:'hide',timeout:15000});
 
           await page.locator('[data-mobile-tab="more"]').click();
           await page.locator('[data-mobile-view="more"]').waitFor({state:'visible'});
-          await page.screenshot({path:'docs/tutorial/05-more.png',fullPage:true});
+          await page.screenshot({path:'docs/tutorial/05-more.png',fullPage:false,animations:'disabled',caret:'hide',timeout:15000});
           await browser.close();
           EOF
           node tutorial-shot.mjs
