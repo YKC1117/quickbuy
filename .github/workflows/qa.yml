@@ -33,6 +33,11 @@ jobs:
             grep -q "$f" docs/sw.js || { echo "Service worker missing $f"; exit 1; }
           done
           echo "offline shell PASS"
+      - name: Platform URL detection regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tools/test_platform_detection.mjs
       - name: Safety regression
         shell: bash
         run: |
