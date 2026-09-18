@@ -1,0 +1,64 @@
+name: Windows Extension Runtime
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/windows-runtime.yml'
+      - 'release-assets/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download QuickBuy 1.0 Windows Release
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download v1.0.0 --pattern QuickBuy-1.0-Windows.zip
+          Expand-Archive -LiteralPath .\QuickBuy-1.0-Windows.zip -DestinationPath .\runtime -Force
+      - name: QuickBuy Chrome / Edge runtime smoke
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $ext = (Get-ChildItem -Path .\runtime -Directory -Recurse | Where-Object { Test-Path (Join-Path $_.FullName 'manifest.json') } | Select-Object -First 1).FullName
+          if (!$ext) { throw 'QuickBuy extension manifest missing from Release ZIP' }
+          $manifest = Get-Content (Join-Path $ext 'manifest.json') -Raw | ConvertFrom-Json
+          if ($manifest.manifest_version -ne 3) { throw 'QuickBuy is not Manifest V3' }
+
+          $browserCandidates = @(
+            @{ Name='Chrome'; Path="$env:ProgramFiles\Google\Chrome\Application\chrome.exe" },
+            @{ Name='Chrome'; Path="${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe" },
+            @{ Name='Edge'; Path="$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe" },
+            @{ Name='Edge'; Path="${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe" }
+          )
+          $browser = $browserCandidates | Where-Object { $_.Path -and (Test-Path $_.Path) } | Select-Object -First 1
+          if (!$browser) { throw 'Chrome or Edge not found on Windows runner' }
+
+          $profile = Join-Path $env:TEMP ('quickbuy-runtime-' + [guid]::NewGuid().ToString('N'))
+          New-Item -ItemType Directory -Path $profile | Out-Null
+          $port = 9339
+          $args = @('--headless=new','--no-first-run','--no-default-browser-check',"--user-data-dir=$profile","--remote-debugging-port=$port","--disable-extensions-except=$ext","--load-extension=$ext",'about:blank')
+          $proc = Start-Process -FilePath $browser.Path -ArgumentList $args -PassThru
+          try {
+            $version = $null
+            for ($i=0; $i -lt 50; $i++) {
+              Start-Sleep -Milliseconds 250
+              try { $version = Invoke-RestMethod "http://127.0.0.1:$port/json/version" -TimeoutSec 1; break } catch {}
+              if ($proc.HasExited) { break }
+            }
+            if (!$version) { throw "$($browser.Name) remote debugging did not start" }
+            $targets = Invoke-RestMethod "http://127.0.0.1:$port/json/list" -TimeoutSec 5
+            $extensionTargets = @($targets | Where-Object { $_.url -like 'chrome-extension://*' -or $_.type -eq 'service_worker' })
+            if ($extensionTargets.Count -lt 1) { throw 'QuickBuy extension target/service worker was not observed after load-extension' }
+            $extTarget = $extensionTargets | Select-Object -First 1
+            Write-Host "QuickBuy Windows runtime smoke PASS"
+            Write-Host "Browser: $($browser.Name)"
+            Write-Host "Target: $($extTarget.type) $($extTarget.url)"
+          } finally {
+            if ($proc -and !$proc.HasExited) { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue }
+            Remove-Item -LiteralPath $profile -Recurse -Force -ErrorAction SilentlyContinue
+          }
