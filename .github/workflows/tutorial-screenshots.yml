@@ -1,0 +1,90 @@
+name: Build Tutorial Screenshots
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install browser
+        shell: bash
+        run: |
+          npm init -y >/dev/null 2>&1
+          npm install --no-save playwright-core@1.55.0 >/dev/null 2>&1
+          command -v google-chrome || command -v chromium || command -v chromium-browser
+      - name: Capture QuickBuy mobile screenshots
+        shell: bash
+        run: |
+          mkdir -p docs/tutorial
+          cat > tutorial-shot.mjs <<'EOF'
+          import { chromium } from 'playwright-core';
+          import { existsSync } from 'fs';
+          const candidates=['/usr/bin/google-chrome','/usr/bin/google-chrome-stable','/usr/bin/chromium','/usr/bin/chromium-browser'];
+          const executablePath=candidates.find(existsSync);
+          if(!executablePath) throw new Error('Chrome not found');
+          const browser=await chromium.launch({headless:true,executablePath,args:['--no-sandbox','--disable-dev-shm-usage']});
+          const context=await browser.newContext({
+            viewport:{width:390,height:844},
+            deviceScaleFactor:2,
+            userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1'
+          });
+          const page=await context.newPage();
+          await page.goto('https://ykc1117.github.io/quickbuy/?tutorial='+Date.now(),{waitUntil:'networkidle',timeout:60000});
+          await page.evaluate(async()=>{
+            localStorage.clear();
+            try{await globalThis.QBA_PWA_API.storage.local.clear();}catch{}
+          });
+          await page.reload({waitUntil:'networkidle'});
+          const onboarding=page.locator('#mobileOnboarding');
+          await onboarding.waitFor({state:'visible'});
+          await page.screenshot({path:'docs/tutorial/01-first-open.png',fullPage:true});
+
+          await page.locator('#mobileOnboardingDoneBtn').click();
+          await page.locator('[data-mobile-view="home"]').waitFor({state:'visible'});
+          await page.screenshot({path:'docs/tutorial/02-home.png',fullPage:true});
+
+          await page.locator('[data-mobile-tab="platforms"]').click();
+          await page.locator('[data-mobile-view="platforms"]').waitFor({state:'visible'});
+          await page.locator('#platformSearch').fill('拓元');
+          await page.screenshot({path:'docs/tutorial/03-platform.png',fullPage:true});
+
+          const first=page.locator('#platformQuickPick button:visible, #ticketPlatformQuickPick button:visible').first();
+          await first.click();
+          await page.waitForTimeout(500);
+          await page.locator('[data-mobile-tab="home"]').click();
+          await page.locator('#mobileKeyword').fill('A區');
+          await page.locator('#mobileKeyword').blur();
+          await page.locator('#mobileQtyPlus').click();
+          await page.waitForTimeout(300);
+          await page.screenshot({path:'docs/tutorial/04-prep.png',fullPage:true});
+
+          await page.locator('[data-mobile-tab="more"]').click();
+          await page.locator('[data-mobile-view="more"]').waitFor({state:'visible'});
+          await page.screenshot({path:'docs/tutorial/05-more.png',fullPage:true});
+          await browser.close();
+          EOF
+          node tutorial-shot.mjs
+      - name: Verify screenshots
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in docs/tutorial/*.png; do
+            test -s "$f"
+            file "$f" | grep -q PNG
+          done
+          test "$(ls docs/tutorial/*.png | wc -l)" -eq 5
+          echo "TUTORIAL_SCREENSHOT_PASS"
+      - name: Commit screenshots
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/tutorial
+          if git diff --cached --quiet; then
+            echo "No screenshot changes"
+          else
+            git commit -m "Add QuickBuy mobile tutorial screenshots"
+            git push origin HEAD:main
+          fi
