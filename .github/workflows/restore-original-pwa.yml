@@ -1,0 +1,44 @@
+name: Restore Original QuickBuy PWA
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'restore-assets/**'
+      - '.github/workflows/restore-original-pwa.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rebuild original PWA bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat restore-assets/docs.part.* > /tmp/original-docs.b64
+          base64 -d /tmp/original-docs.b64 > /tmp/original-docs.zip
+          echo "b823de4978e84104af86b92be27e34f995a73b055c0086a314c7006b026d2f34  /tmp/original-docs.zip" | sha256sum -c -
+          rm -rf /tmp/original-docs
+          mkdir -p /tmp/original-docs
+          unzip -q /tmp/original-docs.zip -d /tmp/original-docs
+          echo "5f6817b087673b30c388d22bf50c3203c4fd0b8a9552dc5d9378af0df8744d40  /tmp/original-docs/docs/index.html" | sha256sum -c -
+          echo "9b696ffe9060f11d1df9ce7af0958a075fd8b91e97733d7d5c2e24254fb95b4a  /tmp/original-docs/docs/dashboard.js" | sha256sum -c -
+          echo "d2b879a114b1afc1983baf65c4c45df9fc9bbecfdbfdb3102aa70f550c236b31  /tmp/original-docs/docs/pwa-boot.js" | sha256sum -c -
+          echo "52c0bd78578ef18429bcb2222e8e4e9bc365dcd382b3e686b27c257bcb2b5b08  /tmp/original-docs/docs/sw.js" | sha256sum -c -
+      - name: Restore docs exactly
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf docs
+          cp -a /tmp/original-docs/docs ./docs
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs
+          if git diff --cached --quiet; then
+            echo "Original docs already restored"
+          else
+            git commit -m "Restore original QuickBuy mobile PWA"
+            git push origin HEAD:main
+          fi
