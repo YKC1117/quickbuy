@@ -1,5 +1,9 @@
 name: Build Tutorial Screenshots
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/tutorial-screenshots.yml'
   workflow_dispatch:
 permissions:
   contents: write
