@@ -32,7 +32,7 @@ jobs:
             printf "%s: " "$f"
             file "/tmp/$f"
             xxd -l 16 "/tmp/$f"
-            python3 -c 'import sys; p="/tmp/"+sys.argv[1]; sig=open(p,"rb").read(8); assert sig==b"\\x89PNG\\r\\n\\x1a\\n", f"not png: {p}"' "$f"
+            python3 -c 'import sys; p="/tmp/"+sys.argv[1]; sig=open(p,"rb").read(8).hex(); assert sig=="89504e470d0a1a0a", f"not png: {p}"' "$f"
           done
           echo "TUTORIAL_LIVE_ASSETS_PASS"
 
