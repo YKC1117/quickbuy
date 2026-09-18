@@ -13,10 +13,15 @@ jobs:
     timeout-minutes: 6
     steps:
       - uses: actions/checkout@v4
-      - name: Install browser harness
+      - name: Install browser harness and Traditional Chinese fonts
         shell: bash
         run: |
           set -euo pipefail
+          sudo apt-get update -y >/dev/null
+          sudo apt-get install -y fonts-noto-cjk >/dev/null
+          fc-cache -f
+          fc-match "Noto Sans CJK TC" | tee /tmp/cjk-font.txt
+          grep -qi "NotoSansCJK" /tmp/cjk-font.txt
           npm init -y >/dev/null 2>&1
           npm install --no-save playwright-core@1.55.0 >/dev/null 2>&1
           command -v google-chrome || command -v chromium || command -v chromium-browser
@@ -38,6 +43,7 @@ jobs:
             userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1'
           });
           const page=await context.newPage();
+          await page.addInitScript(()=>{ document.documentElement?.style?.setProperty?.('--qb-visual-font-ready','1'); });
           const errors=[];
           page.on('pageerror',e=>errors.push(e.message));
           const cdp=await context.newCDPSession(page);
@@ -57,6 +63,10 @@ jobs:
             try{await globalThis.QBA_PWA_API.storage.local.clear();}catch{}
           });
           await page.reload({waitUntil:'networkidle',timeout:60000});
+          await page.addStyleTag({content:'html,body,button,input,select,textarea,*{font-family:"Noto Sans CJK TC","Noto Sans TC",sans-serif !important;}'});
+          await page.evaluate(async()=>{await document.fonts.ready;});
+          const fontOk=await page.evaluate(()=>document.fonts.check('16px "Noto Sans CJK TC"'));
+          if(!fontOk) throw new Error('Traditional Chinese font not available in visual acceptance');
 
           const onboarding=page.locator('#mobileOnboarding');
           if(await onboarding.count() && await onboarding.isVisible().catch(()=>false)){
