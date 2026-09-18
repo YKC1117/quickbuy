@@ -23,6 +23,17 @@
 [data-mobile-view="more"]>.card{box-shadow:none}
 .mobile-primary{min-height:54px}
 @media (max-width:380px){.platforms{grid-template-columns:1fr}.top-pill{display:none}}
+
+.quick-tools{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px}
+.quick-tools button{min-height:44px}
+.target-history{display:grid;gap:7px;margin-top:10px}
+.target-history-row{display:grid;grid-template-columns:minmax(0,1fr) 42px;gap:7px}
+.target-history-open{border:1px solid var(--line,#dce4ee);background:#fff;border-radius:12px;padding:10px;text-align:left;min-width:0}
+.target-history-open b{display:block;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.target-history-open small{display:block;font-size:10px;color:#71839b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.target-history-del{border:0;border-radius:12px;background:#fff0ea;color:#9b3e2f;font-weight:900;font-size:18px}
+.target-history-empty{font-size:11px;color:#71839b;padding:9px 2px}
+.url-tools{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
 </style>
 </head>
 <body>
@@ -42,6 +53,13 @@
 <div class="ready-chip" id="mobilePageChip"><b>頁面</b><small>等待中</small></div>
 <div class="ready-chip" id="mobilePrepChip"><b>準備</b><small>尚未完成</small></div>
 </div>
+<div class="quick-tools" id="mobileQuickTools">
+<button class="soft" id="mobileSwapTargetBtn" type="button">✎ 換網址</button>
+<button class="ghost" id="mobileClearTargetBtn" type="button">× 清空目標</button>
+<button class="soft" id="mobileReopenTargetBtn" type="button">↗ 重新開啟目標</button>
+<button class="ghost" id="mobileRefreshAppBtn" type="button">↻ 重新整理 QuickBuy</button>
+</div>
+<div class="target-history" id="mobileRecentTargets"></div>
 <details class="permission-help" id="mobilePermissionHelp"><summary>iPhone 最簡單用法</summary><div class="optional-body"><ol><li>Safari 開啟 QuickBuy 後，按分享。</li><li>選「加入主畫面」。</li><li>之後直接從主畫面打開 QuickBuy，設定好再按前往平台。</li></ol><p class="tiny" style="margin:8px 0 0">免費 PWA 無法讀取或控制另一個 Safari 分頁；登入、驗證碼、排隊、付款與最後送出仍由你操作。</p></div></details>
 <div class="next-action" id="mobileNextAction">
 <div class="next-label">現在建議</div><div class="next-title" id="mobileNextActionTitle">正在檢查 Safari…</div><div class="next-detail" id="mobileNextActionDetail">QuickBuy 會自動判斷下一步。</div>
@@ -71,7 +89,7 @@
 <details class="platform-group" open=""><summary><span>🎫 售票平台</span><small id="ticketPlatformCount">0</small></summary><div class="platforms" id="ticketPlatformQuickPick"></div></details>
 <details class="platform-group" open=""><summary><span>🛒 購物平台</span><small id="shoppingPlatformCount">0</small></summary><div class="platforms" id="shoppingPlatformQuickPick"></div></details>
 </div>
-<details class="optional" open=""><summary>貼網址自動辨識</summary><div class="optional-body"><input id="platformUrl" inputmode="url" placeholder="貼蝦皮、售票或商城連結"/><button class="ghost" id="detectPlatformBtn" style="width:100%;margin-top:8px">辨識並套用</button><div class="status" id="platformStatus">可直接貼整段分享文字，QuickBuy 會自動抓出網址並辨識平台。</div></div></details>
+<details class="optional" open=""><summary>貼網址自動辨識</summary><div class="optional-body"><input id="platformUrl" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="貼蝦皮、售票或商城連結"/><div class="url-tools"><button class="soft" id="pastePlatformUrlBtn" type="button">貼上並辨識</button><button class="ghost" id="clearPlatformUrlBtn" type="button">清除網址</button></div><button class="ghost" id="detectPlatformBtn" style="width:100%;margin-top:8px" type="button">辨識並套用</button><div class="status" id="platformStatus">可直接貼整段分享文字，QuickBuy 會自動抓出網址並辨識平台。</div></div></details>
 </div>
 </section>
 <section class="view" data-mobile-view="more"><div class="section-head"><h2>更多</h2><span>收藏、備份與救援</span></div><div class="card"><div class="section-head"><h2>分享與安裝</h2><span>完全免費</span></div><div class="row"><button class="soft" id="shareQuickBuyBtn">分享 QuickBuy</button><button class="ghost" id="showInstallGuideBtn">加入主畫面</button></div><a href="tutorial.html" style="display:block;text-align:center;text-decoration:none;border-radius:12px;padding:12px;font-size:13px;font-weight:750;background:#eaf2ff;color:#1d559b;margin-top:8px">📖 看完整圖片教學</a><p class="tiny" style="margin:8px 0 0">分享的是 QuickBuy 入口，不會包含你的數量、規格、收藏或同步密語。</p></div><div class="card"><div class="section-head"><h2>我的網站</h2><span>選用</span></div>
