@@ -37,10 +37,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -q "CAPTCHA" docs/index.html
-          grep -q "OTP" docs/index.html
-          grep -q "QUEUE" SECURITY.md
-          grep -q "FINAL CONFIRM" SECURITY.md
+          grep -q "驗證碼" docs/index.html
+          grep -q "OTP" docs/platform-catalog.js
+          grep -q "QUEUE" docs/platform-catalog.js
+          grep -q "最後確認" docs/dashboard.js
           echo "safety boundary PASS"
       - name: Release metadata
         shell: bash
