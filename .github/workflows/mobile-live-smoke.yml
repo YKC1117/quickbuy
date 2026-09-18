@@ -101,10 +101,18 @@ jobs:
             const visibleButtons=page.locator('#platformQuickPick button:visible, #ticketPlatformQuickPick button:visible, #shoppingPlatformQuickPick button:visible');
             if(await visibleButtons.count()<1) throw new Error(label+': platform search produced no selectable platform');
             await visibleButtons.first().click();
+            await page.waitForTimeout(500);
 
+            const saved=await page.evaluate(async()=>{
+              const r=await globalThis.QBA_PWA_API.storage.local.get('qbaMobilePrepV1');
+              return r?.qbaMobilePrepV1||null;
+            });
+            if(!saved?.platformId) throw new Error(label+': selected platform was not saved');
+            if(!String(saved.targetUrl||'').startsWith('http')) throw new Error(label+': selected target URL was not saved');
+            if(saved.keyword!=='A區') throw new Error(label+': keyword was not saved with prep');
+
+            await page.locator('[data-mobile-tab="home"]').click();
             await page.locator('[data-mobile-view="home"]').waitFor({state:'visible'});
-            const selected=(await page.locator('#mobileCurrentPlatform').textContent()||'').trim();
-            if(!selected || selected.includes('尚未')) throw new Error(label+': selecting platform did not update current platform');
 
             await page.reload({waitUntil:'networkidle'});
             if(await onboarding.count() && await onboarding.isVisible().catch(()=>false)){
@@ -113,8 +121,12 @@ jobs:
             }
             const keyword=await page.locator('#mobileKeyword').inputValue();
             if(keyword!=='A區') throw new Error(label+': keyword did not persist after reload');
-            const selectedAfter=(await page.locator('#mobileCurrentPlatform').textContent()||'').trim();
-            if(!selectedAfter || selectedAfter.includes('尚未')) throw new Error(label+': selected platform did not persist after reload');
+            const savedAfter=await page.evaluate(async()=>{
+              const r=await globalThis.QBA_PWA_API.storage.local.get('qbaMobilePrepV1');
+              return r?.qbaMobilePrepV1||null;
+            });
+            if(savedAfter?.platformId!==saved.platformId) throw new Error(label+': selected platform did not persist after reload');
+            if(savedAfter?.targetUrl!==saved.targetUrl) throw new Error(label+': target URL did not persist after reload');
 
             await page.locator('[data-mobile-tab="platforms"]').click();
             await page.locator('[data-mobile-view="platforms"]').waitFor({state:'visible'});
@@ -130,7 +142,7 @@ jobs:
             if(badCore.length) throw new Error(label+' core resource failures: '+badCore.join(', '));
 
             console.log('MOBILE_CASE_PASS '+label);
-            console.log('selected='+selectedAfter);
+            console.log('platformId='+savedAfter.platformId);
             console.log('persisted keyword='+keyword);
             await context.close();
           }
