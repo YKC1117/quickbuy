@@ -1,0 +1,32 @@
+name: Bug 回報
+description: 回報 QuickBuy 使用問題
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: dropdown
+    id: platform
+    attributes:
+      label: 使用環境
+      options:
+        - iPhone / iPad PWA
+        - Windows Chrome
+        - Windows Edge
+        - 其他
+    validations:
+      required: true
+  - type: textarea
+    id: issue
+    attributes:
+      label: 發生什麼事？
+      description: 請不要貼帳密、Cookie、Token、OTP 或信用卡資料。
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 重現方式
+      placeholder: 1. 開啟… 2. 點選… 3. 出現…
+  - type: input
+    id: browser
+    attributes:
+      label: 瀏覽器版本
