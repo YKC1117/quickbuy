@@ -164,6 +164,7 @@ async function detectPlatformFromInput({adopt=true}={}){
     try{await saveMobilePrep('',{quiet:true});}catch(_){}
     try{await rememberPlatform(info.id);renderPlatformLauncher();}catch(_){}
     renderMobileJourneyState();
+    try{await rememberMobileTarget(mobilePrep.targetUrl,info.id);}catch(_){}
     setMobileHomeStatus('已辨識 '+(info.shortName||info.name)+'，網址已套用。','good');
   }
   return p;
@@ -254,6 +255,69 @@ loadCustomShortcuts();
 try{api.storage.onChanged?.addListener?.((changes,area)=>{if(area==='local'&&changes?.[CUSTOM_SHORTCUTS_KEY])loadCustomShortcuts();});}catch(_){}
 
 // QuickBuy 1.0 mobile shell: single next-action CTA and clear readiness states.
+const MOBILE_RECENT_TARGETS_KEY='qbaMobileRecentTargetsV1';
+let mobileRecentTargets=[];
+function normalizeRecentTarget(raw={}){
+  const url=cleanMobileTargetUrl(raw.url||raw.targetUrl||'');
+  if(!url)return null;
+  const p=globalThis.QBA_PLATFORM_CATALOG?.detect?.(url)||null;
+  return{
+    id:String(raw.id||('qrt_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,7))).slice(0,80),
+    url,
+    platformId:String(raw.platformId||p?.id||'').slice(0,80),
+    label:String(raw.label||p?.shortName||p?.name||(()=>{try{return new URL(url).hostname.replace(/^www\./,'')}catch(_){return'網站'}})()).slice(0,60),
+    at:Number(raw.at||Date.now())
+  };
+}
+async function loadMobileRecentTargets(){
+  try{
+    const x=await api.storage.local.get(MOBILE_RECENT_TARGETS_KEY);
+    mobileRecentTargets=(Array.isArray(x?.[MOBILE_RECENT_TARGETS_KEY])?x[MOBILE_RECENT_TARGETS_KEY]:[]).map(normalizeRecentTarget).filter(Boolean).slice(0,6);
+  }catch(_){mobileRecentTargets=[];}
+  renderMobileRecentTargets();
+}
+async function saveMobileRecentTargets(){
+  mobileRecentTargets=mobileRecentTargets.map(normalizeRecentTarget).filter(Boolean).slice(0,6);
+  try{await api.storage.local.set({[MOBILE_RECENT_TARGETS_KEY]:mobileRecentTargets});}catch(_){}
+  renderMobileRecentTargets();
+}
+async function rememberMobileTarget(url,platformId=''){
+  const safe=cleanMobileTargetUrl(url);if(!safe)return;
+  const p=globalThis.QBA_PLATFORM_CATALOG?.detect?.(safe)||platformById(platformId);
+  const key=safe;
+  mobileRecentTargets=[
+    {id:'qrt_'+Date.now().toString(36),url:safe,platformId:p?.id||platformId||'',label:p?.shortName||p?.name||(()=>{try{return new URL(safe).hostname.replace(/^www\./,'')}catch(_){return'網站'}})(),at:Date.now()},
+    ...mobileRecentTargets.filter(x=>x.url!==key)
+  ].slice(0,6);
+  await saveMobileRecentTargets();
+}
+function renderMobileRecentTargets(){
+  const host=$('mobileRecentTargets');if(!host)return;
+  if(!mobileRecentTargets.length){host.innerHTML='<div class="target-history-empty">還沒有最近目標</div>';return;}
+  host.innerHTML=mobileRecentTargets.map(x=>`<div class="target-history-row" data-recent-target-id="${x.id}"><button class="target-history-open" data-action="open"><b>${x.label}</b><small>${x.url}</small></button><button class="target-history-del" data-action="delete" aria-label="刪除">×</button></div>`).join('');
+}
+async function clearMobileTarget({keepPrep=true}={}){
+  mobilePrep.platformId='';
+  mobilePrep.targetUrl='';
+  mobilePrep.updatedAt=Date.now();
+  if(!keepPrep){mobilePrep.quantity=1;mobilePrep.keyword='';mobilePrep.targetAt='';}
+  await api.storage.local.set({[MOBILE_PREP_KEY]:mobilePrep});
+  if($('platformUrl'))$('platformUrl').value='';
+  if(!keepPrep){
+    if($('mobileQty'))$('mobileQty').value='1';
+    if($('mobileKeyword'))$('mobileKeyword').value='';
+    if($('mobileTargetAt'))$('mobileTargetAt').value='';
+  }
+  renderMobileCountdown();
+  renderMobileJourneyState();
+  await refreshMobileCurrentPage().catch(()=>{});
+}
+async function reopenMobileTarget(){
+  if(!mobilePrep.targetUrl)throw new Error('目前沒有目標網址。');
+  await rememberMobileTarget(mobilePrep.targetUrl,mobilePrep.platformId);
+  return navigateSafari(mobilePrep.targetUrl);
+}
+
 const MOBILE_PREP_KEY='qbaMobilePrepV1';
 let mobilePrep={quantity:1,keyword:'',targetAt:'',platformId:'',targetUrl:'',updatedAt:0};
 let mobileCountdownTimer=0,mobilePrepSaveTimer=0,mobileResumeTimer=0,mobileToastTimer=0;
@@ -289,7 +353,7 @@ async function adoptCurrentPage({manual=false,allowRecognizedAuto=true,reason='f
   if(hasTarget&&!mobilePrep.platformId){try{shouldAdopt=shouldAdopt||new URL(current.safeUrl).hostname===new URL(mobilePrep.targetUrl).hostname;}catch(_){}}
   if(!shouldAdopt){renderMobileJourneyState(current);return{...current,adopted:false};}
   if($('platformUrl'))$('platformUrl').value=current.safeUrl;detectPlatformFromInput();if(currentPlatform){await rememberPlatform(currentPlatform.id);renderPlatformLauncher();}
-  const changed=mobilePrep.targetUrl!==current.safeUrl||mobilePrep.platformId!==(currentPlatform?.id||'');mobilePrep.platformId=currentPlatform?.id||'';mobilePrep.targetUrl=current.safeUrl;await saveMobilePrep('',{quiet:true});
+  const changed=mobilePrep.targetUrl!==current.safeUrl||mobilePrep.platformId!==(currentPlatform?.id||'');mobilePrep.platformId=currentPlatform?.id||'';mobilePrep.targetUrl=current.safeUrl;await saveMobilePrep('',{quiet:true});try{await rememberMobileTarget(mobilePrep.targetUrl,mobilePrep.platformId);}catch(_){}
   const card=document.querySelector('.current');if(card){card.classList.toggle('auto-follow',true);setTimeout(()=>card.classList.remove('auto-follow'),900);}
   if(manual){setMobileHomeStatus(currentPlatform?`已套用 ${currentPlatform.shortName||currentPlatform.name} 目前頁面。`:'已套用目前網頁。','good');mobileToast('目前頁面已準備好','good');}
   else if(changed){setMobileHomeStatus(reason==='foreground'?'已自動跟上目前 Safari 頁面。':'目前頁面已更新。','good');mobileToast('已自動跟上目前頁面','good',1400);}
@@ -320,6 +384,55 @@ try{api.tabs?.onActivated?.addListener?.(()=>handleMobileForeground('tab-activat
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')handleMobileForeground('foreground');});
 window.addEventListener('focus',()=>handleMobileForeground('focus'));
 window.addEventListener('pageshow',()=>handleMobileForeground('pageshow'));
+
+// High-frequency mobile controls.
+$('mobileSwapTargetBtn')?.addEventListener('click',()=>{
+  showMobileView('platforms');
+  const input=$('platformUrl');
+  if(input){input.value='';input.focus();input.scrollIntoView({block:'center',behavior:'smooth'});}
+  if($('platformStatus'))$('platformStatus').textContent='貼上新網址，QuickBuy 會自動辨識並取代目前目標。';
+});
+$('mobileClearTargetBtn')?.addEventListener('click',async()=>{
+  await clearMobileTarget({keepPrep:true});
+  setMobileHomeStatus('已清空目標；數量與規格保留。','good');
+  mobileToast('目標已清空','good');
+});
+$('mobileReopenTargetBtn')?.addEventListener('click',async()=>{
+  try{await reopenMobileTarget();mobileToast('已重新開啟目標','good');}
+  catch(e){mobileToast(humanMobileError(e,'重新開啟失敗'),'error',2200);}
+});
+$('mobileRefreshAppBtn')?.addEventListener('click',async()=>{
+  try{
+    await loadMobilePrep();await loadPlatformPrefs();await loadMobileRecentTargets();renderPlatformLauncher();await refreshMobileCurrentPage();
+    setMobileHomeStatus('QuickBuy 狀態已重新整理。','good');mobileToast('已重新整理','good');
+  }catch(e){mobileToast(humanMobileError(e,'重新整理失敗'),'error',2200);}
+});
+$('pastePlatformUrlBtn')?.addEventListener('click',async()=>{
+  try{
+    const text=await navigator.clipboard.readText();
+    const input=$('platformUrl');if(input){input.value=text;await detectPlatformFromInput();}
+  }catch(_){
+    const input=$('platformUrl');input?.focus();mobileToast('請長按貼上網址','warn',2200);
+  }
+});
+$('clearPlatformUrlBtn')?.addEventListener('click',()=>{
+  const input=$('platformUrl');if(input){input.value='';input.focus();}
+  if($('platformStatus'))$('platformStatus').textContent='網址已清除；可直接貼新的連結。';
+});
+$('mobileRecentTargets')?.addEventListener('click',async e=>{
+  const row=e.target.closest?.('[data-recent-target-id]'),btn=e.target.closest?.('button[data-action]');if(!row||!btn)return;
+  const id=row.dataset.recentTargetId,x=mobileRecentTargets.find(v=>v.id===id);if(!x)return;
+  if(btn.dataset.action==='delete'){mobileRecentTargets=mobileRecentTargets.filter(v=>v.id!==id);await saveMobileRecentTargets();return;}
+  if(btn.dataset.action==='open'){
+    mobilePrep.platformId=x.platformId||globalThis.QBA_PLATFORM_CATALOG?.detect?.(x.url)?.id||'';
+    mobilePrep.targetUrl=x.url;mobilePrep.updatedAt=Date.now();
+    await api.storage.local.set({[MOBILE_PREP_KEY]:mobilePrep});
+    renderMobileJourneyState();showMobileView('home');
+    try{await navigateSafari(x.url);}catch(_){}
+  }
+});
+loadMobileRecentTargets();
+
 loadMobilePrep().then(()=>handleMobileForeground('startup')).catch(()=>{});
 
 // QuickBuy 1.0 onboarding and direct platform navigation.
