@@ -12,9 +12,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install browser
+      - name: Install browser and Traditional Chinese fonts
         shell: bash
         run: |
+          sudo apt-get update -y >/dev/null
+          sudo apt-get install -y fonts-noto-cjk >/dev/null
+          fc-cache -f
+          fc-match "Noto Sans CJK TC" | tee /tmp/font-match.txt
+          grep -qi "NotoSansCJK" /tmp/font-match.txt
           npm init -y >/dev/null 2>&1
           npm install --no-save playwright-core@1.55.0 >/dev/null 2>&1
           command -v google-chrome || command -v chromium || command -v chromium-browser
@@ -36,6 +41,14 @@ jobs:
           });
           const page=await context.newPage();
           const cdp=await context.newCDPSession(page);
+          async function forceCjkFont(){
+            await page.addStyleTag({content:'html,body,button,input,select,textarea,*{font-family:"Noto Sans CJK TC","Noto Sans TC",sans-serif !important;}'});
+            const ok=await page.evaluate(async()=>{
+              await document.fonts.ready;
+              return document.fonts.check('16px "Noto Sans CJK TC"') && document.body.innerText.includes('QuickBuy');
+            });
+            if(!ok) throw new Error('Traditional Chinese font not ready');
+          }
           async function shot(path){
             const out=await cdp.send('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:false});
             writeFileSync(path,Buffer.from(out.data,'base64'));
@@ -50,6 +63,8 @@ jobs:
           await onboarding.waitFor({state:'visible'});
           await shot('docs/tutorial/01-first-open.png');
 
+          const onboardingText=(await onboarding.innerText()).replace(/\s+/g,'');
+          if(!onboardingText.includes('把QuickBuy放到主畫面')) throw new Error('Chinese onboarding text missing before screenshot');
           await page.locator('#mobileOnboardingDoneBtn').click();
           await page.locator('[data-mobile-view="home"]').waitFor({state:'visible'});
           await shot('docs/tutorial/02-home.png');
