@@ -24,7 +24,7 @@ jobs:
           mkdir -p docs/tutorial
           cat > tutorial-shot.mjs <<'EOF'
           import { chromium } from 'playwright-core';
-          import { existsSync } from 'fs';
+          import { existsSync, writeFileSync } from 'fs';
           const candidates=['/usr/bin/google-chrome','/usr/bin/google-chrome-stable','/usr/bin/chromium','/usr/bin/chromium-browser'];
           const executablePath=candidates.find(existsSync);
           if(!executablePath) throw new Error('Chrome not found');
@@ -35,6 +35,11 @@ jobs:
             userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1'
           });
           const page=await context.newPage();
+          const cdp=await context.newCDPSession(page);
+          async function shot(path){
+            const out=await cdp.send('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:false});
+            writeFileSync(path,Buffer.from(out.data,'base64'));
+          }
           await page.goto('https://ykc1117.github.io/quickbuy/?tutorial='+Date.now(),{waitUntil:'networkidle',timeout:60000});
           await page.evaluate(async()=>{
             localStorage.clear();
@@ -43,16 +48,16 @@ jobs:
           await page.reload({waitUntil:'networkidle'});
           const onboarding=page.locator('#mobileOnboarding');
           await onboarding.waitFor({state:'visible'});
-          await page.screenshot({path:'docs/tutorial/01-first-open.png',fullPage:false,animations:'disabled',caret:'hide',timeout:15000});
+          await shot('docs/tutorial/01-first-open.png');
 
           await page.locator('#mobileOnboardingDoneBtn').click();
           await page.locator('[data-mobile-view="home"]').waitFor({state:'visible'});
-          await page.screenshot({path:'docs/tutorial/02-home.png',fullPage:false,animations:'disabled',caret:'hide',timeout:15000});
+          await shot('docs/tutorial/02-home.png');
 
           await page.locator('[data-mobile-tab="platforms"]').click();
           await page.locator('[data-mobile-view="platforms"]').waitFor({state:'visible'});
           await page.locator('#platformSearch').fill('拓元');
-          await page.screenshot({path:'docs/tutorial/03-platform.png',fullPage:false,animations:'disabled',caret:'hide',timeout:15000});
+          await shot('docs/tutorial/03-platform.png');
 
           const first=page.locator('#platformQuickPick button:visible, #ticketPlatformQuickPick button:visible').first();
           await first.click();
@@ -62,11 +67,11 @@ jobs:
           await page.locator('#mobileKeyword').blur();
           await page.locator('#mobileQtyPlus').click();
           await page.waitForTimeout(300);
-          await page.screenshot({path:'docs/tutorial/04-prep.png',fullPage:false,animations:'disabled',caret:'hide',timeout:15000});
+          await shot('docs/tutorial/04-prep.png');
 
           await page.locator('[data-mobile-tab="more"]').click();
           await page.locator('[data-mobile-view="more"]').waitFor({state:'visible'});
-          await page.screenshot({path:'docs/tutorial/05-more.png',fullPage:false,animations:'disabled',caret:'hide',timeout:15000});
+          await shot('docs/tutorial/05-more.png');
           await browser.close();
           EOF
           node tutorial-shot.mjs
