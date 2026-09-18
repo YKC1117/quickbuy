@@ -1,0 +1,108 @@
+name: Mobile Live Runtime Smoke
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - '.github/workflows/mobile-live-smoke.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify deployed files match repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://ykc1117.github.io/quickbuy"
+          for f in index.html dashboard.js pwa-boot.js pwa-adapter.js platform-catalog.js sync-core.js sync-crypto.js sync-provider.js sw.js manifest.webmanifest; do
+            curl -fsSL --retry 5 --retry-delay 2 "$base/$f?smoke=${GITHUB_SHA}" -o "/tmp/$f"
+            cmp "docs/$f" "/tmp/$f"
+          done
+          echo "LIVE_FILE_MATCH_PASS"
+      - name: Install browser test harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm init -y >/dev/null 2>&1
+          npm install --no-save playwright-core@1.55.0 >/dev/null 2>&1
+          command -v google-chrome || command -v chromium || command -v chromium-browser
+      - name: Run iPhone-size interaction smoke
+        shell: bash
+        run: |
+          cat > /tmp/quickbuy-smoke.mjs <<'EOF'
+          import { chromium } from 'playwright-core';
+          import { existsSync } from 'fs';
+
+          const candidates=[
+            '/usr/bin/google-chrome',
+            '/usr/bin/google-chrome-stable',
+            '/usr/bin/chromium',
+            '/usr/bin/chromium-browser'
+          ];
+          const executablePath=candidates.find(existsSync);
+          if(!executablePath) throw new Error('Chrome/Chromium not found');
+
+          const browser=await chromium.launch({
+            headless:true,
+            executablePath,
+            args:['--no-sandbox','--disable-dev-shm-usage']
+          });
+          const context=await browser.newContext({
+            viewport:{width:390,height:844},
+            userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1'
+          });
+          const page=await context.newPage();
+          const errors=[];
+          page.on('pageerror',e=>errors.push('pageerror: '+e.message));
+          page.on('console',m=>{if(m.type()==='error') errors.push('console: '+m.text())});
+
+          await page.goto('https://ykc1117.github.io/quickbuy/?runtime='+Date.now(),{waitUntil:'networkidle',timeout:60000});
+          await page.evaluate(()=>localStorage.clear());
+          await page.reload({waitUntil:'networkidle'});
+
+          // Onboarding may appear on first load; verify and close if present.
+          const onboarding=page.locator('#mobileOnboarding');
+          if(await onboarding.count()){
+            const visible=await onboarding.isVisible().catch(()=>false);
+            if(visible){
+              const done=page.locator('#mobileOnboardingDoneBtn');
+              if(await done.count()) await done.click();
+            }
+          }
+
+          await page.locator('[data-mobile-view="home"]').waitFor({state:'visible'});
+          const qty=page.locator('#mobileQty');
+          if(await qty.inputValue()!=='1') throw new Error('initial qty is not 1');
+          await page.locator('#mobileQtyPlus').click();
+          if(await qty.inputValue()!=='2') throw new Error('qty plus failed');
+          await page.locator('#mobileQtyMinus').click();
+          if(await qty.inputValue()!=='1') throw new Error('qty minus failed');
+
+          await page.locator('#mobileKeyword').fill('A區');
+          await page.locator('[data-mobile-tab="platforms"]').click();
+          await page.locator('[data-mobile-view="platforms"]').waitFor({state:'visible'});
+          await page.locator('#platformSearch').fill('拓元');
+          const buttons=page.locator('#platformQuickPick button, #ticketPlatformQuickPick button, #shoppingPlatformQuickPick button');
+          if(await buttons.count()<1) throw new Error('platform search produced no selectable platform');
+
+          await page.locator('[data-mobile-tab="more"]').click();
+          await page.locator('[data-mobile-view="more"]').waitFor({state:'visible'});
+          await page.locator('[data-mobile-tab="home"]').click();
+          await page.locator('[data-mobile-view="home"]').waitFor({state:'visible'});
+
+          const current=await page.locator('#mobileCurrentPlatform').textContent();
+          if(current==null) throw new Error('current platform label missing');
+
+          if(errors.length) throw new Error(errors.join('\n'));
+          console.log('MOBILE_LIVE_RUNTIME_PASS');
+          console.log('viewport=390x844');
+          console.log('qty+/- PASS');
+          console.log('platform search PASS');
+          console.log('tab navigation PASS');
+          await browser.close();
+          EOF
+          node /tmp/quickbuy-smoke.mjs
