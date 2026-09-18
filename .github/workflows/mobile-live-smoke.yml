@@ -168,6 +168,45 @@ jobs:
             const nextBtn=page.locator('#mobileNextActionBtn');
             if(await nextBtn.count()<1 || !(await nextBtn.isVisible())) throw new Error(label+': primary next action missing');
 
+            // Fast-control regression: refresh keeps state.
+            await page.locator('#mobileRefreshAppBtn').click();
+            await page.waitForTimeout(300);
+            const afterRefresh=await page.evaluate(async()=>{
+              const r=await globalThis.QBA_PWA_API.storage.local.get('qbaMobilePrepV1');
+              return r?.qbaMobilePrepV1||null;
+            });
+            if(afterRefresh?.platformId!==savedAfter.platformId || afterRefresh?.keyword!=='A區') throw new Error(label+': refresh changed saved prep');
+
+            // Swap target should jump to URL input and clear only the URL field.
+            await page.locator('#mobileSwapTargetBtn').click();
+            await page.locator('[data-mobile-view="platforms"]').waitFor({state:'visible'});
+            if((await page.locator('#platformUrl').inputValue())!=='') throw new Error(label+': swap target did not clear URL input');
+
+            // Pasted Shopee URL creates a recent target.
+            await page.locator('#platformUrl').fill('https://tw.shp.ee/TestFast123');
+            await page.waitForTimeout(650);
+            await page.locator('[data-mobile-tab="home"]').click();
+            await page.locator('[data-mobile-view="home"]').waitFor({state:'visible'});
+            const recentRows=page.locator('#mobileRecentTargets [data-recent-target-id]');
+            if(await recentRows.count()<1) throw new Error(label+': recent target was not created');
+
+            // Delete one recent target.
+            const beforeDelete=await recentRows.count();
+            await recentRows.first().locator('button[data-action="delete"]').click();
+            await page.waitForTimeout(200);
+            const afterDelete=await page.locator('#mobileRecentTargets [data-recent-target-id]').count();
+            if(afterDelete!==beforeDelete-1) throw new Error(label+': recent target delete failed');
+
+            // Clear target keeps quantity and keyword.
+            await page.locator('#mobileClearTargetBtn').click();
+            await page.waitForTimeout(250);
+            const cleared=await page.evaluate(async()=>{
+              const r=await globalThis.QBA_PWA_API.storage.local.get('qbaMobilePrepV1');
+              return r?.qbaMobilePrepV1||null;
+            });
+            if(cleared?.platformId || cleared?.targetUrl) throw new Error(label+': clear target did not clear platform/url');
+            if(cleared?.quantity!==1 || cleared?.keyword!=='A區') throw new Error(label+': clear target erased prep unexpectedly');
+
             if(errors.length) throw new Error(label+' '+errors.join('\n'));
             if(badCore.length) throw new Error(label+' core resource failures: '+badCore.join(', '));
 
@@ -182,6 +221,7 @@ jobs:
           console.log('MOBILE_LIVE_RUNTIME_PASS');
           console.log('qty+/- PASS');
           console.log('pasted Shopee share URL detection PASS');
+          console.log('fast target controls PASS');
           console.log('platform select + persistence PASS');
           console.log('tab navigation PASS');
           console.log('core resources PASS');
