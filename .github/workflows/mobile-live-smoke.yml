@@ -51,58 +51,97 @@ jobs:
             executablePath,
             args:['--no-sandbox','--disable-dev-shm-usage']
           });
-          const context=await browser.newContext({
-            viewport:{width:390,height:844},
-            userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1'
-          });
-          const page=await context.newPage();
-          const errors=[];
-          page.on('pageerror',e=>errors.push('pageerror: '+e.message));
-          page.on('console',m=>{if(m.type()==='error') errors.push('console: '+m.text())});
 
-          await page.goto('https://ykc1117.github.io/quickbuy/?runtime='+Date.now(),{waitUntil:'networkidle',timeout:60000});
-          await page.evaluate(()=>localStorage.clear());
-          await page.reload({waitUntil:'networkidle'});
+          const CORE_RE=/\/(index\.html|dashboard\.js|pwa-boot\.js|pwa-adapter\.js|platform-catalog\.js|sync-core\.js|sync-crypto\.js|sync-provider\.js|sw\.js|manifest\.webmanifest|icons\/icon(?:192|512)\.png)(?:\?|$)/;
 
-          // Onboarding may appear on first load; verify and close if present.
-          const onboarding=page.locator('#mobileOnboarding');
-          if(await onboarding.count()){
-            const visible=await onboarding.isVisible().catch(()=>false);
-            if(visible){
+          async function runCase(viewport,label){
+            const context=await browser.newContext({
+              viewport,
+              userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1'
+            });
+            const page=await context.newPage();
+            const errors=[];
+            const badCore=[];
+            page.on('pageerror',e=>errors.push('pageerror: '+e.message));
+            page.on('response',res=>{
+              try{
+                const u=new URL(res.url());
+                if(u.hostname==='ykc1117.github.io' && CORE_RE.test(u.pathname) && res.status()>=400){
+                  badCore.push(res.status()+' '+res.url());
+                }
+              }catch{}
+            });
+
+            await page.goto('https://ykc1117.github.io/quickbuy/?runtime='+Date.now(),{waitUntil:'networkidle',timeout:60000});
+            await page.evaluate(()=>localStorage.clear());
+            await page.reload({waitUntil:'networkidle'});
+
+            const onboarding=page.locator('#mobileOnboarding');
+            if(await onboarding.count() && await onboarding.isVisible().catch(()=>false)){
               const done=page.locator('#mobileOnboardingDoneBtn');
               if(await done.count()) await done.click();
             }
+
+            await page.locator('[data-mobile-view="home"]').waitFor({state:'visible'});
+            const qty=page.locator('#mobileQty');
+            if(await qty.inputValue()!=='1') throw new Error(label+': initial qty is not 1');
+
+            await page.locator('#mobileQtyPlus').click();
+            if(await qty.inputValue()!=='2') throw new Error(label+': qty plus failed');
+            await page.locator('#mobileQtyMinus').click();
+            if(await qty.inputValue()!=='1') throw new Error(label+': qty minus failed');
+
+            await page.locator('#mobileKeyword').fill('A區');
+            await page.locator('#mobileKeyword').blur();
+
+            await page.locator('[data-mobile-tab="platforms"]').click();
+            await page.locator('[data-mobile-view="platforms"]').waitFor({state:'visible'});
+            await page.locator('#platformSearch').fill('拓元');
+
+            const visibleButtons=page.locator('#platformQuickPick button:visible, #ticketPlatformQuickPick button:visible, #shoppingPlatformQuickPick button:visible');
+            if(await visibleButtons.count()<1) throw new Error(label+': platform search produced no selectable platform');
+            await visibleButtons.first().click();
+
+            await page.locator('[data-mobile-view="home"]').waitFor({state:'visible'});
+            const selected=(await page.locator('#mobileCurrentPlatform').textContent()||'').trim();
+            if(!selected || selected.includes('尚未')) throw new Error(label+': selecting platform did not update current platform');
+
+            await page.reload({waitUntil:'networkidle'});
+            if(await onboarding.count() && await onboarding.isVisible().catch(()=>false)){
+              const done=page.locator('#mobileOnboardingDoneBtn');
+              if(await done.count()) await done.click();
+            }
+            const keyword=await page.locator('#mobileKeyword').inputValue();
+            if(keyword!=='A區') throw new Error(label+': keyword did not persist after reload');
+            const selectedAfter=(await page.locator('#mobileCurrentPlatform').textContent()||'').trim();
+            if(!selectedAfter || selectedAfter.includes('尚未')) throw new Error(label+': selected platform did not persist after reload');
+
+            await page.locator('[data-mobile-tab="platforms"]').click();
+            await page.locator('[data-mobile-view="platforms"]').waitFor({state:'visible'});
+            await page.locator('[data-mobile-tab="more"]').click();
+            await page.locator('[data-mobile-view="more"]').waitFor({state:'visible'});
+            await page.locator('[data-mobile-tab="home"]').click();
+            await page.locator('[data-mobile-view="home"]').waitFor({state:'visible'});
+
+            const nextBtn=page.locator('#mobileNextActionBtn');
+            if(await nextBtn.count()<1 || !(await nextBtn.isVisible())) throw new Error(label+': primary next action missing');
+
+            if(errors.length) throw new Error(label+' '+errors.join('\n'));
+            if(badCore.length) throw new Error(label+' core resource failures: '+badCore.join(', '));
+
+            console.log('MOBILE_CASE_PASS '+label);
+            console.log('selected='+selectedAfter);
+            console.log('persisted keyword='+keyword);
+            await context.close();
           }
 
-          await page.locator('[data-mobile-view="home"]').waitFor({state:'visible'});
-          const qty=page.locator('#mobileQty');
-          if(await qty.inputValue()!=='1') throw new Error('initial qty is not 1');
-          await page.locator('#mobileQtyPlus').click();
-          if(await qty.inputValue()!=='2') throw new Error('qty plus failed');
-          await page.locator('#mobileQtyMinus').click();
-          if(await qty.inputValue()!=='1') throw new Error('qty minus failed');
-
-          await page.locator('#mobileKeyword').fill('A區');
-          await page.locator('[data-mobile-tab="platforms"]').click();
-          await page.locator('[data-mobile-view="platforms"]').waitFor({state:'visible'});
-          await page.locator('#platformSearch').fill('拓元');
-          const buttons=page.locator('#platformQuickPick button, #ticketPlatformQuickPick button, #shoppingPlatformQuickPick button');
-          if(await buttons.count()<1) throw new Error('platform search produced no selectable platform');
-
-          await page.locator('[data-mobile-tab="more"]').click();
-          await page.locator('[data-mobile-view="more"]').waitFor({state:'visible'});
-          await page.locator('[data-mobile-tab="home"]').click();
-          await page.locator('[data-mobile-view="home"]').waitFor({state:'visible'});
-
-          const current=await page.locator('#mobileCurrentPlatform').textContent();
-          if(current==null) throw new Error('current platform label missing');
-
-          if(errors.length) throw new Error(errors.join('\n'));
+          await runCase({width:390,height:844},'390x844');
+          await runCase({width:440,height:956},'440x956');
           console.log('MOBILE_LIVE_RUNTIME_PASS');
-          console.log('viewport=390x844');
           console.log('qty+/- PASS');
-          console.log('platform search PASS');
+          console.log('platform select + persistence PASS');
           console.log('tab navigation PASS');
+          console.log('core resources PASS');
           await browser.close();
           EOF
           node quickbuy-smoke.mjs
