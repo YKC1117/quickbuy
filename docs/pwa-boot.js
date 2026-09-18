@@ -19,8 +19,5 @@
     const status=document.getElementById('status'); if(status)status.textContent='QuickBuy 1.0 採本機優先；不設定同步也能使用。';
     document.getElementById('shareQuickBuyBtn')?.addEventListener('click',shareQuickBuy);
     document.getElementById('showInstallGuideBtn')?.addEventListener('click',()=>{const o=document.getElementById('mobileOnboarding');if(o)o.hidden=false;});
-    document.getElementById('openTutorial')?.addEventListener('click',()=>window.QBShowTutorial?.());
-    document.getElementById('closeTutorial')?.addEventListener('click',()=>window.QBHideTutorial?.());
-    
   });
 })();

@@ -63,7 +63,7 @@
 
   async function save(next){
     const clean=next&&typeof next==='object'?next:{};
-    legacySave(clean);
+    legacySave(clean); // backup + transparent migration fallback for older PWA builds.
     const ok=await idbWrite(clean);
     if(ok)migrated=true;
     return ok;
