@@ -1,6 +1,6 @@
 (() => {
   const REVIEWED_AT = "2026-09-18";
-  const CATALOG_VERSION = "1.4.0";
+  const CATALOG_VERSION = "1.5.0";
 
   const PLATFORM_CATALOG = [
     {
@@ -60,7 +60,7 @@
     {
       id:"shopee-tw", category:"shopping", categoryLabel:"購物",
       name:"蝦皮購物 Shopee", shortName:"蝦皮",
-      hosts:["shopee.tw","*.shopee.tw"], homepage:"https://shopee.tw/",
+      hosts:["shopee.tw","*.shopee.tw","tw.shp.ee","*.shp.ee","shope.ee","*.shope.ee"], homepage:"https://shopee.tw/",
       officialFlow:["首頁 / 搜尋","商品頁","規格 / 數量","購物車","結帳","登入 / 驗證","付款確認"],
       statusModel:["HOME","SEARCH","PRODUCT","VARIANT","CART","CHECKOUT","NEED_USER","UNKNOWN"],
       mobileNote:"目前提供平台辨識、快捷入口與狀態模型；App / Web 實際頁面差異需另外驗證。",
@@ -106,9 +106,25 @@
     if (p.startsWith("*.")) { const base = p.slice(2); return host === base || host.endsWith(`.${base}`); }
     return host === p;
   }
+  function normalizeUrlInput(raw) {
+    let text = String(raw || "").trim();
+    if (!text) return "";
+    const embedded = text.match(/https?:\/\/[^\s<>"'，。！？；、）】》]+/i);
+    if (embedded) text = embedded[0];
+    else if (/^[\w.-]+\.[a-z]{2,}(?:[\/:?#].*)?$/i.test(text)) text = "https://" + text;
+    text = text.replace(/[\)\]\}>,，。！？；、」』】》]+$/g, "");
+    try {
+      const u = new URL(text);
+      if (!/^https?:$/.test(u.protocol)) return "";
+      u.username = "";
+      u.password = "";
+      return u.toString();
+    } catch (_) { return ""; }
+  }
   function detect(urlString) {
-    let url; try { url = new URL(String(urlString || "")); } catch (_) { return null; }
-    if (!/^https?:$/.test(url.protocol)) return null;
+    const normalized = normalizeUrlInput(urlString);
+    if (!normalized) return null;
+    let url; try { url = new URL(normalized); } catch (_) { return null; }
     return PLATFORM_CATALOG.find(p => p.hosts.some(h => hostMatches(url.hostname, h))) || null;
   }
   function statusLabel(platform) {
@@ -133,5 +149,5 @@
       { id:"shopping-checkout-human-confirm", platform:"shopping", input:"送出訂單 / 付款確認", expected:"NEED_USER", rule:"購物平台最終送單與付款維持人工確認" }
     ];
   }
-  globalThis.QBA_PLATFORM_CATALOG = Object.freeze({ VERSION:CATALOG_VERSION, REVIEWED_AT, detect, list, compact, statusLabel, regressionCases });
+  globalThis.QBA_PLATFORM_CATALOG = Object.freeze({ VERSION:CATALOG_VERSION, REVIEWED_AT, normalizeUrlInput, detect, list, compact, statusLabel, regressionCases });
 })();
