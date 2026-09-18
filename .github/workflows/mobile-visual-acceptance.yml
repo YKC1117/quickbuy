@@ -1,0 +1,136 @@
+name: Mobile Visual Acceptance
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/mobile-visual-acceptance.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  visual:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install browser harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm init -y >/dev/null 2>&1
+          npm install --no-save playwright-core@1.55.0 >/dev/null 2>&1
+          command -v google-chrome || command -v chromium || command -v chromium-browser
+      - name: Operate live QuickBuy and capture key screens
+        shell: bash
+        run: |
+          mkdir -p visual-shots
+          cat > visual-acceptance.mjs <<'EOF'
+          import { chromium } from 'playwright-core';
+          import { existsSync, writeFileSync } from 'fs';
+
+          const candidates=['/usr/bin/google-chrome','/usr/bin/google-chrome-stable','/usr/bin/chromium','/usr/bin/chromium-browser'];
+          const executablePath=candidates.find(existsSync);
+          if(!executablePath) throw new Error('Chrome/Chromium not found');
+
+          const browser=await chromium.launch({headless:true,executablePath,args:['--no-sandbox','--disable-dev-shm-usage']});
+          const context=await browser.newContext({
+            viewport:{width:390,height:844},
+            userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1'
+          });
+          const page=await context.newPage();
+          const errors=[];
+          page.on('pageerror',e=>errors.push(e.message));
+          const cdp=await context.newCDPSession(page);
+
+          const timeout=(ms,label)=>new Promise((_,rej)=>setTimeout(()=>rej(new Error(label+' timeout')),ms));
+          async function shot(name){
+            const out=await Promise.race([
+              cdp.send('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:false}),
+              timeout(7000,'screenshot '+name)
+            ]);
+            writeFileSync('visual-shots/'+name+'.png',Buffer.from(out.data,'base64'));
+          }
+
+          await page.goto('https://ykc1117.github.io/quickbuy/?visual='+Date.now(),{waitUntil:'networkidle',timeout:60000});
+          await page.evaluate(async()=>{
+            localStorage.clear();
+            try{await globalThis.QBA_PWA_API.storage.local.clear();}catch{}
+          });
+          await page.reload({waitUntil:'networkidle',timeout:60000});
+
+          const onboarding=page.locator('#mobileOnboarding');
+          if(await onboarding.count() && await onboarding.isVisible().catch(()=>false)){
+            const done=page.locator('#mobileOnboardingDoneBtn');
+            if(await done.count()) await done.click();
+          }
+
+          await page.locator('[data-mobile-view="home"]').waitFor({state:'visible'});
+          await shot('01-home');
+
+          await page.locator('#mobileKeyword').fill('A區');
+          await page.locator('#mobileQtyPlus').click();
+
+          await page.locator('[data-mobile-tab="platforms"]').click();
+          await page.locator('[data-mobile-view="platforms"]').waitFor({state:'visible'});
+          await page.locator('#platformUrl').fill('蝦皮分享給你：https://tw.shp.ee/VisualTest123 這個商品');
+          await page.waitForTimeout(750);
+          const status=(await page.locator('#platformStatus').textContent()||'').trim();
+          if(!status.includes('蝦皮')||!status.includes('購物平台')) throw new Error('Shopee detect failed: '+status);
+          await shot('02-shopee-detected');
+
+          await page.locator('[data-mobile-tab="home"]').click();
+          await page.locator('[data-mobile-view="home"]').waitFor({state:'visible'});
+          await shot('03-home-with-target');
+
+          await page.locator('#mobileSwapTargetBtn').click();
+          await page.locator('[data-mobile-view="platforms"]').waitFor({state:'visible'});
+          if((await page.locator('#platformUrl').inputValue())!=='') throw new Error('swap target failed');
+          await shot('04-swap-target');
+
+          await page.locator('#platformUrl').fill('https://tw.shp.ee/VisualRecent456');
+          await page.waitForTimeout(750);
+          await page.locator('[data-mobile-tab="home"]').click();
+          await page.locator('[data-mobile-view="home"]').waitFor({state:'visible'});
+          if(await page.locator('#mobileRecentTargets [data-recent-target-id]').count()<1) throw new Error('recent target missing');
+          await shot('05-recent-target');
+
+          await page.locator('#mobileRefreshAppBtn').click();
+          await page.waitForTimeout(350);
+          if((await page.locator('#mobileKeyword').inputValue())!=='A區') throw new Error('refresh lost keyword');
+
+          await page.locator('#mobileClearTargetBtn').click();
+          await page.waitForTimeout(300);
+          const saved=await page.evaluate(async()=>{
+            const r=await globalThis.QBA_PWA_API.storage.local.get('qbaMobilePrepV1');
+            return r?.qbaMobilePrepV1||null;
+          });
+          if(saved?.targetUrl||saved?.platformId) throw new Error('clear target failed');
+          if(saved?.quantity!==2||saved?.keyword!=='A區') throw new Error('clear target lost prep');
+          await shot('06-cleared-target');
+
+          await page.locator('[data-mobile-tab="more"]').click();
+          await page.locator('[data-mobile-view="more"]').waitFor({state:'visible'});
+          await shot('07-more');
+
+          if(errors.length) throw new Error('page errors: '+errors.join(' | '));
+          console.log('VISUAL_ACCEPTANCE_INTERACTION_PASS');
+          await browser.close();
+          EOF
+          node visual-acceptance.mjs
+      - name: Verify screenshots
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(find visual-shots -name '*.png' | wc -l)" -eq 7
+          for f in visual-shots/*.png; do
+            test -s "$f"
+            file "$f" | grep -q 'PNG image data, 390 x 844'
+          done
+          echo "VISUAL_SCREENSHOT_PASS"
+      - name: Upload visual acceptance
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quickbuy-visual-acceptance
+          path: visual-shots/
+          if-no-files-found: error
