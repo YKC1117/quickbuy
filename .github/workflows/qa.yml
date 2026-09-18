@@ -1,0 +1,49 @@
+name: QuickBuy QA
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  qa:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: PWA syntax and manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check docs/dashboard.js
+          node --check docs/pwa-adapter.js
+          node --check docs/pwa-boot.js
+          node --check docs/platform-catalog.js
+          node --check docs/sync-core.js
+          node --check docs/sync-crypto.js
+          node --check docs/sync-provider.js
+          node --check docs/sw.js
+          node -e "JSON.parse(require('fs').readFileSync('docs/manifest.webmanifest','utf8')); console.log('manifest PASS')"
+      - name: PWA offline shell references
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in index.html manifest.webmanifest pwa-adapter.js platform-catalog.js sync-core.js sync-crypto.js sync-provider.js dashboard.js pwa-boot.js icons/icon.svg; do
+            test -f "docs/$f" || { echo "Missing docs/$f"; exit 1; }
+            grep -q "$f" docs/sw.js || { echo "Service worker missing $f"; exit 1; }
+          done
+          echo "offline shell PASS"
+      - name: Safety regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q "CAPTCHA" docs/index.html
+          grep -q "OTP" docs/index.html
+          grep -q "QUEUE" SECURITY.md
+          grep -q "FINAL CONFIRM" SECURITY.md
+          echo "safety boundary PASS"
+      - name: Release metadata
+        shell: bash
+        run: |
+          test -f release-assets/windows.part.06
+          echo "release chunks PASS"
