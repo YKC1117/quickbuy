@@ -33,7 +33,7 @@ jobs:
       - name: Run iPhone-size interaction smoke
         shell: bash
         run: |
-          cat > /tmp/quickbuy-smoke.mjs <<'EOF'
+          cat > quickbuy-smoke.mjs <<'EOF'
           import { chromium } from 'playwright-core';
           import { existsSync } from 'fs';
 
@@ -105,4 +105,4 @@ jobs:
           console.log('tab navigation PASS');
           await browser.close();
           EOF
-          node /tmp/quickbuy-smoke.mjs
+          node quickbuy-smoke.mjs
