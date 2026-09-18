@@ -111,6 +111,21 @@ jobs:
 
             await page.locator('[data-mobile-tab="platforms"]').click();
             await page.locator('[data-mobile-view="platforms"]').waitFor({state:'visible'});
+
+            // Real pasted-share regression: Shopee copied text + short URL must be recognized and applied.
+            await page.locator('#platformUrl').fill('蝦皮分享給你：https://tw.shp.ee/AbCdEf 這個商品');
+            await page.waitForTimeout(700);
+            const pastedStatus=(await page.locator('#platformStatus').textContent()||'').trim();
+            if(!pastedStatus.includes('蝦皮') || !pastedStatus.includes('購物平台')) throw new Error(label+': pasted Shopee share text was not recognized: '+pastedStatus);
+            const normalizedPasted=await page.locator('#platformUrl').inputValue();
+            if(normalizedPasted!=='https://tw.shp.ee/AbCdEf') throw new Error(label+': pasted Shopee URL was not normalized: '+normalizedPasted);
+            const pastedSaved=await page.evaluate(async()=>{
+              const r=await globalThis.QBA_PWA_API.storage.local.get('qbaMobilePrepV1');
+              return r?.qbaMobilePrepV1||null;
+            });
+            if(pastedSaved?.platformId!=='shopee-tw') throw new Error(label+': pasted Shopee URL did not save shopee-tw');
+            if(!String(pastedSaved?.targetUrl||'').startsWith('https://tw.shp.ee/')) throw new Error(label+': pasted Shopee target URL was not saved');
+
             await page.locator('#platformSearch').fill('拓元');
 
             const visibleButtons=page.locator('#platformQuickPick button:visible, #ticketPlatformQuickPick button:visible, #shoppingPlatformQuickPick button:visible');
@@ -166,6 +181,7 @@ jobs:
           await runCase({width:440,height:956},'440x956');
           console.log('MOBILE_LIVE_RUNTIME_PASS');
           console.log('qty+/- PASS');
+          console.log('pasted Shopee share URL detection PASS');
           console.log('platform select + persistence PASS');
           console.log('tab navigation PASS');
           console.log('core resources PASS');
