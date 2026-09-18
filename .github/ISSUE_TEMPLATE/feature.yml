@@ -1,0 +1,15 @@
+name: 功能建議
+description: 建議 QuickBuy 新功能或操作改善
+title: "[Idea] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: 你希望改善什麼？
+    validations:
+      required: true
+  - type: textarea
+    id: flow
+    attributes:
+      label: 理想操作方式
