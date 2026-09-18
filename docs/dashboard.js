@@ -134,17 +134,43 @@ $('cloudPushBtn').addEventListener('click',cloudPush);
 renderProvider();
 
 
-function detectPlatformFromInput(){
-  const url=$('platformUrl')?.value?.trim()||'';
-  const p=globalThis.QBA_PLATFORM_CATALOG?.detect?.(url)||null;
+let platformDetectTimer=0;
+async function detectPlatformFromInput({adopt=true}={}){
+  const input=$('platformUrl');
+  const raw=input?.value||'';
+  const normalized=globalThis.QBA_PLATFORM_CATALOG?.normalizeUrlInput?.(raw)||'';
+  const p=normalized?(globalThis.QBA_PLATFORM_CATALOG?.detect?.(normalized)||null):null;
   const info=p?globalThis.QBA_PLATFORM_CATALOG.compact(p):null;
-  if(!$('platformStatus')) return;
-  if(!url){$('platformStatus').textContent='請輸入目標網址。';return;}
-  if(!info){$('platformStatus').textContent='未列入平台 Catalog；Windows / Safari 會維持通用辨識。';return;}
-  $('platformStatus').textContent=info.category==='shopping'?`${info.name} · 購物快捷 / 狀態模型可用 · 送單與付款人工確認`:`${info.name} · ${info.status} · ${info.phases.join(' → ')} · 真站乾跑：${info.liveDryRunStatus==='verified'?'已驗證':'待驗'}`;
+  if(input&&normalized&&input.value!==normalized) input.value=normalized;
+  if(!$('platformStatus')) return p;
+  if(!raw.trim()){$('platformStatus').textContent='貼上售票或購物網址，QuickBuy 會自動辨識。';return null;}
+  if(!normalized){$('platformStatus').textContent='沒有讀到有效網址；可以直接貼整段分享文字，QuickBuy 會自動抓出連結。';return null;}
+  if(!info){
+    $('platformStatus').textContent='一般網站 · 已讀到網址，但目前不在平台 Catalog。';
+    if(adopt&&globalThis.QBA_PWA){
+      mobilePrep.platformId='';
+      mobilePrep.targetUrl=cleanMobileTargetUrl(normalized);
+      mobilePrep.updatedAt=Date.now();
+      try{await saveMobilePrep('',{quiet:true});}catch(_){}
+      renderMobileJourneyState();
+    }
+    return null;
+  }
+  $('platformStatus').textContent=info.category==='shopping' ? ('已辨識：'+info.name+' · 購物平台') : ('已辨識：'+info.name+' · 售票平台');
+  if(adopt&&globalThis.QBA_PWA){
+    mobilePrep.platformId=info.id;
+    mobilePrep.targetUrl=cleanMobileTargetUrl(normalized);
+    mobilePrep.updatedAt=Date.now();
+    try{await saveMobilePrep('',{quiet:true});}catch(_){}
+    try{await rememberPlatform(info.id);renderPlatformLauncher();}catch(_){}
+    renderMobileJourneyState();
+    setMobileHomeStatus('已辨識 '+(info.shortName||info.name)+'，網址已套用。','good');
+  }
+  return p;
 }
-$('detectPlatformBtn')?.addEventListener('click',detectPlatformFromInput);
-$('platformUrl')?.addEventListener('change',detectPlatformFromInput);
+$('detectPlatformBtn')?.addEventListener('click',()=>detectPlatformFromInput());
+$('platformUrl')?.addEventListener('change',()=>detectPlatformFromInput());
+$('platformUrl')?.addEventListener('input',()=>{clearTimeout(platformDetectTimer);platformDetectTimer=setTimeout(()=>detectPlatformFromInput(),220);});
 
 // Quick platform launcher: shared Catalog, local recent preference, no transaction automation.
 const PLATFORM_PREFS_KEY='qbaSafariPlatformLauncherPrefsV1';
