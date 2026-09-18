@@ -23,6 +23,23 @@ jobs:
             cmp "docs/$f" "/tmp/$f"
           done
           echo "LIVE_FILE_MATCH_PASS"
+          curl -fsSL --retry 5 --retry-delay 2 "$base/tutorial.html?smoke=${GITHUB_SHA}" -o /tmp/tutorial.html
+          grep -q "QuickBuy 怎麼用" /tmp/tutorial.html
+          grep -q "第一次使用？看圖片教學" docs/index.html
+          for f in 01-first-open.png 02-home.png 03-platform.png 04-prep.png 05-more.png; do
+            curl -fsSL --retry 5 --retry-delay 2 "$base/tutorial/$f?smoke=${GITHUB_SHA}" -o "/tmp/$f"
+            test -s "/tmp/$f"
+            python3 - "$f" <<'PY'
+import sys
+p="/tmp/"+sys.argv[1]
+with open(p,"rb") as fh:
+    sig=fh.read(8)
+if sig != b"\x89PNG\r\n\x1a\n":
+    raise SystemExit(f"not png: {p}")
+PY
+          done
+          echo "TUTORIAL_LIVE_ASSETS_PASS"
+
       - name: Install browser test harness
         shell: bash
         run: |
