@@ -75,6 +75,8 @@ jobs:
           }
 
           await page.locator('[data-mobile-view="home"]').waitFor({state:'visible'});
+          if(await page.locator('#mobileClearTargetBtn').isVisible()) throw new Error('clear target should be hidden without target');
+          if(await page.locator('#mobileReopenTargetBtn').isVisible()) throw new Error('reopen target should be hidden without target');
           await shot('01-home');
 
           await page.locator('#mobileKeyword').fill('A區');
@@ -90,6 +92,8 @@ jobs:
 
           await page.locator('[data-mobile-tab="home"]').click();
           await page.locator('[data-mobile-view="home"]').waitFor({state:'visible'});
+          if(!(await page.locator('#mobileClearTargetBtn').isVisible())) throw new Error('clear target missing with active target');
+          if(!(await page.locator('#mobileReopenTargetBtn').isVisible())) throw new Error('reopen target missing with active target');
           await shot('03-home-with-target');
 
           await page.locator('#mobileSwapTargetBtn').click();
@@ -116,10 +120,14 @@ jobs:
           });
           if(saved?.targetUrl||saved?.platformId) throw new Error('clear target failed');
           if(saved?.quantity!==2||saved?.keyword!=='A區') throw new Error('clear target lost prep');
+          if(await page.locator('#mobileClearTargetBtn').isVisible()) throw new Error('clear target still visible after clearing');
+          if(await page.locator('#mobileReopenTargetBtn').isVisible()) throw new Error('reopen target still visible after clearing');
           await shot('06-cleared-target');
 
           await page.locator('[data-mobile-tab="more"]').click();
           await page.locator('[data-mobile-view="more"]').waitFor({state:'visible'});
+          if(await page.locator('#shortcutForm').isVisible()) throw new Error('shortcut form should be hidden by default');
+          if((await page.locator('#mobileToast').getAttribute('class')||'').includes('show')) throw new Error('toast should not cover next tab');
           await shot('07-more');
 
           if(errors.length) throw new Error('page errors: '+errors.join(' | '));
