@@ -216,6 +216,27 @@ jobs:
             if(!reopenEvents.some(x=>x.kind==='open'&&x.url==='about:blank')) throw new Error(label+': reopen target did not pre-open a PWA tab');
             if(!reopenEvents.some(x=>(x.kind==='replace'||x.kind==='href')&&/^https?:/.test(x.url))) throw new Error(label+': reopen target did not navigate pre-opened tab');
 
+            // Custom shortcut must also pre-open before async persistence.
+            await page.evaluate(async()=>{
+              const now=Date.now();
+              await globalThis.QBA_PWA_API.storage.local.set({
+                qbaCustomShortcutsV1:[{id:'runtime-shortcut',name:'測試網站',url:'https://example.com/runtime',category:'other',pinned:false,createdAt:now,lastUsedAt:0,updatedAt:now}]
+              });
+            });
+            await page.locator('[data-mobile-tab="more"]').click();
+            await page.locator('[data-mobile-view="more"]').waitFor({state:'visible'});
+            await page.waitForTimeout(250);
+            const shortcutOpen=page.locator('#shortcutList [data-shortcut-id="runtime-shortcut"] button[data-action="open"]');
+            if(await shortcutOpen.count()<1) throw new Error(label+': custom shortcut did not render');
+            const opensBeforeShortcut=await page.evaluate(()=>window.__qbOpenEvents.length);
+            await shortcutOpen.click();
+            await page.waitForTimeout(250);
+            const shortcutEvents=await page.evaluate(n=>window.__qbOpenEvents.slice(n),opensBeforeShortcut);
+            if(!shortcutEvents.some(x=>x.kind==='open'&&x.url==='about:blank')) throw new Error(label+': shortcut did not pre-open a PWA tab');
+            if(!shortcutEvents.some(x=>(x.kind==='replace'||x.kind==='href')&&/^https?:/.test(x.url))) throw new Error(label+': shortcut did not navigate pre-opened tab');
+            await page.locator('[data-mobile-tab="home"]').click();
+            await page.locator('[data-mobile-view="home"]').waitFor({state:'visible'});
+
             // Fast-control regression: refresh keeps state.
             await page.locator('#mobileRefreshAppBtn').click();
             await page.waitForTimeout(300);
@@ -270,6 +291,7 @@ jobs:
           console.log('qty+/- PASS');
           console.log('pasted Shopee share URL detection PASS');
           console.log('fast target controls PASS');
+          console.log('PWA pre-open navigation PASS');
           console.log('platform select + persistence PASS');
           console.log('tab navigation PASS');
           console.log('core resources PASS');
