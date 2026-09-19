@@ -19,6 +19,22 @@
   function nowIso() { return new Date().toISOString(); }
   function isPlain(v) { return !!v && typeof v === 'object' && !Array.isArray(v); }
   function isBlockedKey(k) { return BLOCKED_KEY_PATTERNS.some(rx => rx.test(String(k || ''))); }
+  const SENSITIVE_QUERY_KEY = /^(?:token|access_token|refresh_token|auth|authorization|session|sessionid|sid|jwt|otp|password|passwd|cvv|cvc|api[_-]?key|apikey)$/i;
+  const TRACKING_QUERY_KEY = /^(?:utm_.+|fbclid|gclid|dclid|msclkid|igshid|share_channel_code)$/i;
+  function sanitizeSyncUrl(raw) {
+    try {
+      const catalogSanitizer = globalThis.QBA_PLATFORM_CATALOG?.sanitizeTargetUrl;
+      if (typeof catalogSanitizer === 'function') return catalogSanitizer(raw);
+      const u = new URL(String(raw || '').trim());
+      if (!/^https?:$/.test(u.protocol)) return '';
+      for (const key of [...u.searchParams.keys()]) {
+        if (SENSITIVE_QUERY_KEY.test(key) || TRACKING_QUERY_KEY.test(key)) u.searchParams.delete(key);
+      }
+      if (/(?:^|[#&?])(token|access_token|refresh_token|auth|authorization|session|sessionid|sid|jwt|otp|password|passwd|api[_-]?key|apikey)=/i.test(String(u.hash || ''))) u.hash = '';
+      u.username = ''; u.password = '';
+      return u.toString();
+    } catch (_) { return ''; }
+  }
   function sanitizeDeep(value, depth = 0) {
     if (depth > 16) return null;
     if (Array.isArray(value)) return value.slice(0, 1000).map(v => sanitizeDeep(v, depth + 1));
@@ -31,7 +47,7 @@
     for (const [k,v] of Object.entries(value)) {
       if (isBlockedKey(k)) continue;
       if (/^(?:targetUrl|url)$/i.test(k) && typeof v === 'string') {
-        try { const u = new URL(v); out[k] = /^https?:$/.test(u.protocol) ? `${u.origin}${u.pathname || '/'}` : ''; } catch (_) { out[k] = ''; }
+        out[k] = sanitizeSyncUrl(v);
         continue;
       }
       out[k] = sanitizeDeep(v, depth + 1);
