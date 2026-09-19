@@ -89,6 +89,17 @@ jobs:
           await page.locator('#platformSearch').fill('拓元');
           await shot('docs/tutorial/03-platform.png');
 
+          await page.locator('#platformSearch').fill('');
+          await page.locator('#platformUrl').fill('https://www.momoshop.com.tw/goods/GoodsDetail.jsp?i_code=123456&token=secret&utm_source=tutorial');
+          await page.waitForTimeout(700);
+          const urlValue=await page.locator('#platformUrl').inputValue();
+          if(urlValue!=='https://www.momoshop.com.tw/goods/GoodsDetail.jsp?i_code=123456') throw new Error('Tutorial URL sanitizer mismatch: '+urlValue);
+          const openBtn=page.locator('#platformOpenTargetBtn');
+          if(!(await openBtn.isVisible())) throw new Error('Tutorial direct-open button missing');
+          if(!((await openBtn.textContent())||'').includes('momo')) throw new Error('Tutorial direct-open button label mismatch');
+          await page.locator('#platformUrl').scrollIntoViewIfNeeded();
+          await shot('docs/tutorial/03-url.png');
+
           await page.locator('[data-mobile-tab="home"]').click();
           await page.locator('[data-mobile-view="home"]').waitFor({state:'visible'});
           await page.locator('#mobileKeyword').fill('A區');
@@ -111,7 +122,7 @@ jobs:
             test -s "$f"
             file "$f" | grep -q PNG
           done
-          test "$(ls docs/tutorial/*.png | wc -l)" -eq 5
+          test "$(ls docs/tutorial/*.png | wc -l)" -eq 6
           echo "TUTORIAL_SCREENSHOT_PASS"
       - name: Commit screenshots
         shell: bash
