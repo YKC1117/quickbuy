@@ -14,6 +14,20 @@ jobs:
     timeout-minutes: 6
     steps:
       - uses: actions/checkout@v4
+      - name: Wait for deployed PWA
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://ykc1117.github.io/quickbuy"
+          for i in $(seq 1 30); do
+            if curl -fsSL "$base/dashboard.js?visual=${GITHUB_SHA}-$i" -o /tmp/dashboard.js && cmp -s docs/dashboard.js /tmp/dashboard.js; then
+              echo "LIVE_PWA_READY"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "Timed out waiting for GitHub Pages deployment"
+          exit 1
       - name: Install browser harness and Traditional Chinese fonts
         shell: bash
         run: |
