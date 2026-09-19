@@ -18,7 +18,7 @@ QuickBuy 可以做平台辨識、頁面狀態判斷、倒數、開賣提醒、�
 
 ## 隱私
 
-預設 local-first。同步與分享資料不包含信用卡、CVV、密碼、OTP、Cookie、Session 或登入 Token；收藏網址會移除 username、password、query 與 hash。
+預設 local-first。同步與分享資料不包含信用卡、CVV、密碼、OTP、Cookie、Session 或登入 Token；網址會移除帳密、敏感 token/session/OTP 類參數與追蹤參數，但保留商品／活動頁正常運作所需的功能參數。
 
 ## 專案結構
 
