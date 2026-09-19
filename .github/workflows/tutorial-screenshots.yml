@@ -23,6 +23,20 @@ jobs:
           npm init -y >/dev/null 2>&1
           npm install --no-save playwright-core@1.55.0 >/dev/null 2>&1
           command -v google-chrome || command -v chromium || command -v chromium-browser
+      - name: Wait for deployed PWA
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://ykc1117.github.io/quickbuy"
+          for i in $(seq 1 30); do
+            if curl -fsSL "$base/dashboard.js?tutorial=${GITHUB_SHA}-$i" -o /tmp/dashboard.js && cmp -s docs/dashboard.js /tmp/dashboard.js; then
+              echo "LIVE_PWA_READY"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "Timed out waiting for GitHub Pages deployment"
+          exit 1
       - name: Capture QuickBuy mobile screenshots
         shell: bash
         run: |
@@ -59,6 +73,7 @@ jobs:
             try{await globalThis.QBA_PWA_API.storage.local.clear();}catch{}
           });
           await page.reload({waitUntil:'networkidle'});
+          await forceCjkFont();
           const onboarding=page.locator('#mobileOnboarding');
           await onboarding.waitFor({state:'visible'});
           await shot('docs/tutorial/01-first-open.png');
