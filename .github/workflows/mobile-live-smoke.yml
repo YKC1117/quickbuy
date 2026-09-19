@@ -102,6 +102,28 @@ jobs:
             await page.evaluate(()=>localStorage.clear());
             await page.reload({waitUntil:'networkidle'});
 
+            // Intercept PWA window.open so we can verify user-gesture opening order without depending on third-party sites.
+            await page.evaluate(()=>{
+              window.__qbOpenEvents=[];
+              window.open=(url,target,features)=>{
+                const popup={
+                  opener:null,
+                  closed:false,
+                  close(){this.closed=true;},
+                  location:{
+                    current:String(url||''),
+                    replace(next){this.current=String(next||'');window.__qbOpenEvents.push({kind:'replace',url:this.current});}
+                  }
+                };
+                Object.defineProperty(popup.location,'href',{
+                  get(){return this.current;},
+                  set(next){this.current=String(next||'');window.__qbOpenEvents.push({kind:'href',url:this.current});}
+                });
+                window.__qbOpenEvents.push({kind:'open',url:String(url||''),target:String(target||'')});
+                return popup;
+              };
+            });
+
             const onboarding=page.locator('#mobileOnboarding');
             if(await onboarding.count() && await onboarding.isVisible().catch(()=>false)){
               const done=page.locator('#mobileOnboardingDoneBtn');
@@ -141,8 +163,12 @@ jobs:
 
             const visibleButtons=page.locator('#platformQuickPick button:visible, #ticketPlatformQuickPick button:visible, #shoppingPlatformQuickPick button:visible');
             if(await visibleButtons.count()<1) throw new Error(label+': platform search produced no selectable platform');
+            const opensBeforePlatform=await page.evaluate(()=>window.__qbOpenEvents.length);
             await visibleButtons.first().click();
             await page.waitForTimeout(500);
+            const platformOpenEvents=await page.evaluate(n=>window.__qbOpenEvents.slice(n),opensBeforePlatform);
+            if(!platformOpenEvents.some(x=>x.kind==='open'&&x.url==='about:blank')) throw new Error(label+': platform selection did not pre-open a PWA tab');
+            if(!platformOpenEvents.some(x=>(x.kind==='replace'||x.kind==='href')&&/^https?:/.test(x.url))) throw new Error(label+': platform selection did not navigate pre-opened tab');
 
             const saved=await page.evaluate(async()=>{
               const r=await globalThis.QBA_PWA_API.storage.local.get('qbaMobilePrepV1');
@@ -178,6 +204,14 @@ jobs:
 
             const nextBtn=page.locator('#mobileNextActionBtn');
             if(await nextBtn.count()<1 || !(await nextBtn.isVisible())) throw new Error(label+': primary next action missing');
+
+            // Reopen target must issue an immediate pre-open before async persistence.
+            const opensBeforeReopen=await page.evaluate(()=>window.__qbOpenEvents.length);
+            await page.locator('#mobileReopenTargetBtn').click();
+            await page.waitForTimeout(250);
+            const reopenEvents=await page.evaluate(n=>window.__qbOpenEvents.slice(n),opensBeforeReopen);
+            if(!reopenEvents.some(x=>x.kind==='open'&&x.url==='about:blank')) throw new Error(label+': reopen target did not pre-open a PWA tab');
+            if(!reopenEvents.some(x=>(x.kind==='replace'||x.kind==='href')&&/^https?:/.test(x.url))) throw new Error(label+': reopen target did not navigate pre-opened tab');
 
             // Fast-control regression: refresh keeps state.
             await page.locator('#mobileRefreshAppBtn').click();
