@@ -21,8 +21,9 @@ jobs:
           base="https://ykc1117.github.io/quickbuy"
           wait_match() {
             local f="$1"
+            local tmp="/tmp/quickbuy-$(echo "$f" | tr '/' '_')"
             for i in $(seq 1 30); do
-              if curl -fsSL "$base/$f?smoke=${GITHUB_SHA}-$i" -o "/tmp/$f" && cmp -s "docs/$f" "/tmp/$f"; then
+              if curl -fsSL "$base/$f?smoke=${GITHUB_SHA}-$i" -o "$tmp" && cmp -s "docs/$f" "$tmp"; then
                 return 0
               fi
               sleep 3
@@ -34,18 +35,17 @@ jobs:
             wait_match "$f"
           done
           echo "LIVE_FILE_MATCH_PASS"
-          curl -fsSL --retry 5 --retry-delay 2 "$base/tutorial.html?smoke=${GITHUB_SHA}" -o /tmp/tutorial.html
-          grep -q "QuickBuy 怎麼用" /tmp/tutorial.html
-          cmp docs/tutorial.html /tmp/tutorial.html
+          wait_match "tutorial.html"
+          grep -q "QuickBuy 怎麼用" docs/tutorial.html
           grep -q "第一次使用？看圖片教學" docs/index.html
           for f in 01-first-open.png 02-home.png 03-platform.png 04-prep.png 05-more.png; do
-            curl -fsSL --retry 5 --retry-delay 2 "$base/tutorial/$f?smoke=${GITHUB_SHA}" -o "/tmp/$f"
-            test -s "/tmp/$f"
-            cmp "docs/tutorial/$f" "/tmp/$f"
+            wait_match "tutorial/$f"
+            tmp="/tmp/quickbuy-tutorial_$f"
+            test -s "$tmp"
             printf "%s: " "$f"
-            file "/tmp/$f"
-            xxd -l 16 "/tmp/$f"
-            python3 -c 'import sys; p="/tmp/"+sys.argv[1]; sig=open(p,"rb").read(8).hex(); assert sig=="89504e470d0a1a0a", f"not png: {p}"' "$f"
+            file "$tmp"
+            xxd -l 16 "$tmp"
+            python3 -c 'import sys; p=sys.argv[1]; sig=open(p,"rb").read(8).hex(); assert sig=="89504e470d0a1a0a", f"not png: {p}"' "$tmp"
           done
           echo "TUTORIAL_LIVE_ASSETS_PASS"
 
