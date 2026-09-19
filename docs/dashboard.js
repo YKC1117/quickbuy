@@ -139,17 +139,18 @@ async function detectPlatformFromInput({adopt=true}={}){
   const input=$('platformUrl');
   const raw=input?.value||'';
   const normalized=globalThis.QBA_PLATFORM_CATALOG?.normalizeUrlInput?.(raw)||'';
-  const p=normalized?(globalThis.QBA_PLATFORM_CATALOG?.detect?.(normalized)||null):null;
+  const safe=globalThis.QBA_PLATFORM_CATALOG?.sanitizeTargetUrl?.(normalized)||normalized;
+  const p=safe?(globalThis.QBA_PLATFORM_CATALOG?.detect?.(safe)||null):null;
   const info=p?globalThis.QBA_PLATFORM_CATALOG.compact(p):null;
-  if(input&&normalized&&input.value!==normalized) input.value=normalized;
+  if(input&&safe&&input.value!==safe) input.value=safe;
   if(!$('platformStatus')) return p;
   if(!raw.trim()){$('platformStatus').textContent='貼上售票或購物網址，QuickBuy 會自動辨識。';return null;}
-  if(!normalized){$('platformStatus').textContent='沒有讀到有效網址；可以直接貼整段分享文字，QuickBuy 會自動抓出連結。';return null;}
+  if(!safe){$('platformStatus').textContent='沒有讀到有效網址；可以直接貼整段分享文字，QuickBuy 會自動抓出連結。';return null;}
   if(!info){
     $('platformStatus').textContent='一般網站 · 已讀到網址，但目前不在平台 Catalog。';
     if(adopt&&globalThis.QBA_PWA){
       mobilePrep.platformId='';
-      mobilePrep.targetUrl=cleanMobileTargetUrl(normalized);
+      mobilePrep.targetUrl=cleanMobileTargetUrl(safe);
       mobilePrep.updatedAt=Date.now();
       try{await saveMobilePrep('',{quiet:true});}catch(_){}
       renderMobileJourneyState();
@@ -159,7 +160,7 @@ async function detectPlatformFromInput({adopt=true}={}){
   $('platformStatus').textContent=info.category==='shopping' ? ('已辨識：'+info.name+' · 購物平台') : ('已辨識：'+info.name+' · 售票平台');
   if(adopt&&globalThis.QBA_PWA){
     mobilePrep.platformId=info.id;
-    mobilePrep.targetUrl=cleanMobileTargetUrl(normalized);
+    mobilePrep.targetUrl=cleanMobileTargetUrl(safe);
     mobilePrep.updatedAt=Date.now();
     try{await saveMobilePrep('',{quiet:true});}catch(_){}
     try{await rememberPlatform(info.id);renderPlatformLauncher();}catch(_){}
@@ -242,7 +243,7 @@ $('familyExportBtn')?.addEventListener('click',()=>{try{exportFamilyPack();$('pl
 $('familyImportBtn')?.addEventListener('click',()=>$('familyImportFile')?.click());
 $('familyImportFile')?.addEventListener('change',async e=>{try{const r=await importFamilyPack(e.target?.files?.[0]);$('platformStatus').textContent=`分享包匯入完成：${r.shortcuts} 個快捷網站、${r.platforms} 個常用平台。`;}catch(err){$('platformStatus').textContent=`分享包匯入失敗：${err.message}`;}finally{if(e.target)e.target.value='';}});
 
-$('saveCurrentShortcutBtn')?.addEventListener('click',async()=>{if(!globalThis.QBA_PWA){saveCurrentPageShortcut();return;}let raw='';try{raw=await navigator.clipboard?.readText?.()||'';}catch(_){}const normalized=globalThis.QBA_PLATFORM_CATALOG?.normalizeUrlInput?.(raw)||'';showShortcutForm(normalized?{url:normalized}:{});setTimeout(()=>{const el=normalized?$('shortcutName'):$('shortcutUrl');try{el?.focus();}catch(_){}},0);if(!normalized)mobileToast('請貼上要收藏的網址','warn',1800);});
+$('saveCurrentShortcutBtn')?.addEventListener('click',async()=>{if(!globalThis.QBA_PWA){saveCurrentPageShortcut();return;}let raw='';try{raw=await navigator.clipboard?.readText?.()||'';}catch(_){}const normalized=globalThis.QBA_PLATFORM_CATALOG?.normalizeUrlInput?.(raw)||'';const safe=globalThis.QBA_PLATFORM_CATALOG?.sanitizeTargetUrl?.(normalized)||normalized;showShortcutForm(safe?{url:safe}:{});setTimeout(()=>{const el=safe?$('shortcutName'):$('shortcutUrl');try{el?.focus();}catch(_){}},0);if(!safe)mobileToast('請貼上要收藏的網址','warn',1800);});
 $('addShortcutBtn')?.addEventListener('click',()=>showShortcutForm());
 $('shortcutCancelBtn')?.addEventListener('click',hideShortcutForm);
 $('shortcutSaveBtn')?.addEventListener('click',async()=>{try{await upsertShortcut({id:editingShortcutId,name:$('shortcutName').value,url:$('shortcutUrl').value,category:$('shortcutCategory').value});hideShortcutForm();$('platformStatus').textContent='快捷網站已儲存。';}catch(e){$('platformStatus').textContent=`儲存失敗：${e.message}`;}});
