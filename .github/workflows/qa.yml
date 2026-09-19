@@ -38,6 +38,11 @@ jobs:
         run: |
           set -euo pipefail
           node tools/test_platform_detection.mjs
+      - name: Sync functional URL regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tools/test_sync_urls.mjs
       - name: Safety regression
         shell: bash
         run: |
