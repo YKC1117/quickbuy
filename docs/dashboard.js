@@ -135,6 +135,13 @@ renderProvider();
 
 
 let platformDetectTimer=0;
+function updatePlatformOpenTargetButton(url='',info=null){
+  const btn=$('platformOpenTargetBtn');if(!btn)return;
+  const safe=cleanMobileTargetUrl(url);
+  btn.hidden=!safe;
+  btn.dataset.targetUrl=safe||'';
+  btn.textContent=safe?'前往 '+(info?.shortName||info?.name||'目標網站'):'前往目標網站';
+}
 async function detectPlatformFromInput({adopt=true}={}){
   const input=$('platformUrl');
   const raw=input?.value||'';
@@ -144,9 +151,10 @@ async function detectPlatformFromInput({adopt=true}={}){
   const info=p?globalThis.QBA_PLATFORM_CATALOG.compact(p):null;
   if(input&&safe&&input.value!==safe) input.value=safe;
   if(!$('platformStatus')) return p;
-  if(!raw.trim()){$('platformStatus').textContent='貼上售票或購物網址，QuickBuy 會自動辨識。';return null;}
-  if(!safe){$('platformStatus').textContent='沒有讀到有效網址；可以直接貼整段分享文字，QuickBuy 會自動抓出連結。';return null;}
+  if(!raw.trim()){updatePlatformOpenTargetButton();$('platformStatus').textContent='貼上售票或購物網址，QuickBuy 會自動辨識。';return null;}
+  if(!safe){updatePlatformOpenTargetButton();$('platformStatus').textContent='沒有讀到有效網址；可以直接貼整段分享文字，QuickBuy 會自動抓出連結。';return null;}
   if(!info){
+    updatePlatformOpenTargetButton(safe,null);
     $('platformStatus').textContent='一般網站 · 已讀到網址，但目前不在平台 Catalog。';
     if(adopt&&globalThis.QBA_PWA){
       mobilePrep.platformId='';
@@ -157,6 +165,7 @@ async function detectPlatformFromInput({adopt=true}={}){
     }
     return null;
   }
+  updatePlatformOpenTargetButton(safe,info);
   $('platformStatus').textContent=info.category==='shopping' ? ('已辨識：'+info.name+' · 購物平台') : ('已辨識：'+info.name+' · 售票平台');
   if(adopt&&globalThis.QBA_PWA){
     mobilePrep.platformId=info.id;
@@ -173,6 +182,7 @@ async function detectPlatformFromInput({adopt=true}={}){
 $('detectPlatformBtn')?.addEventListener('click',()=>detectPlatformFromInput());
 $('platformUrl')?.addEventListener('change',()=>detectPlatformFromInput());
 $('platformUrl')?.addEventListener('input',()=>{clearTimeout(platformDetectTimer);platformDetectTimer=setTimeout(()=>detectPlatformFromInput(),220);});
+$('platformOpenTargetBtn')?.addEventListener('click',async e=>{const safe=cleanMobileTargetUrl(e.currentTarget?.dataset?.targetUrl||$('platformUrl')?.value||'');if(!safe){updatePlatformOpenTargetButton();return;}try{await navigateSafari(safe);mobileToast('已開啟目標網站','good',1000);}catch(err){mobileToast(humanMobileError(err,'無法開啟目標'),'error',2200);}});
 
 // Quick platform launcher: shared Catalog, local recent preference, no transaction automation.
 const PLATFORM_PREFS_KEY='qbaSafariPlatformLauncherPrefsV1';
@@ -394,6 +404,7 @@ $('mobileSwapTargetBtn')?.addEventListener('click',()=>{
   showMobileView('platforms');
   const input=$('platformUrl');
   if(input){input.value='';input.focus();input.scrollIntoView({block:'center',behavior:'smooth'});}
+  updatePlatformOpenTargetButton();
   if($('platformStatus'))$('platformStatus').textContent='貼上新網址，QuickBuy 會自動辨識並取代目前目標。';
 });
 $('mobileClearTargetBtn')?.addEventListener('click',async()=>{
@@ -421,6 +432,7 @@ $('pastePlatformUrlBtn')?.addEventListener('click',async()=>{
 });
 $('clearPlatformUrlBtn')?.addEventListener('click',()=>{
   const input=$('platformUrl');if(input){input.value='';input.focus();}
+  updatePlatformOpenTargetButton();
   if($('platformStatus'))$('platformStatus').textContent='網址已清除；可直接貼新的連結。';
 });
 $('mobileRecentTargets')?.addEventListener('click',async e=>{
