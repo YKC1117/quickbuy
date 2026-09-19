@@ -1,8 +1,5 @@
 import fs from 'node:fs';
 import vm from 'node:vm';
-import cryptoMod from 'node:crypto';
-
-globalThis.crypto=cryptoMod.webcrypto;
 globalThis.self=globalThis;
 
 vm.runInThisContext(fs.readFileSync('docs/platform-catalog.js','utf8'),{filename:'platform-catalog.js'});
