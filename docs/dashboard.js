@@ -189,9 +189,10 @@ function orderedPlatforms(category=''){const rows=globalThis.QBA_PLATFORM_CATALO
 function renderPlatformLauncher(){const latest=platformPrefs.recent[0]||'',query=platformSearch.trim().toLowerCase();const group=(category,hostId,countId)=>{const all=orderedPlatforms(category),rows=all.filter(p=>!query||`${p.name} ${p.shortName} ${p.categoryLabel||''}`.toLowerCase().includes(query)),host=$(hostId);if($(countId))$(countId).textContent=query?`${rows.length} / ${all.length}`:all.length;if(host)host.innerHTML=rows.length?rows.map(p=>`<button type="button" data-platform-id="${p.id}" class="${p.id===latest?'recent':''}"><b>${p.shortName}</b><small>${p.id===latest?'最近':'開官網'}</small></button>`).join(''):'<div class="platform-empty">沒有符合搜尋的平台</div>';};group('ticket','ticketPlatformQuickPick','ticketPlatformCount');group('shopping','shoppingPlatformQuickPick','shoppingPlatformCount');const recent=(globalThis.QBA_PLATFORM_CATALOG?.list?.()||[]).find(p=>p.id===latest),row=$('recentPlatformRow');if(row)row.hidden=!recent;if($('recentPlatformName'))$('recentPlatformName').textContent=recent?.name||'—';if($('recentPlatformBtn'))$('recentPlatformBtn').dataset.platformId=recent?.id||'';}
 async function choosePlatform(id){
   const p=(globalThis.QBA_PLATFORM_CATALOG?.list?.()||[]).find(x=>x.id===id);if(!p?.homepage)return;
+  const preopened=preopenPwaTarget();
   $('platformUrl').value=p.homepage;detectPlatformFromInput();await rememberPlatform(id);renderPlatformLauncher();
   if(globalThis.QBA_PWA){mobilePrep.platformId=p.id;mobilePrep.targetUrl=cleanMobileTargetUrl(p.homepage);mobilePrep.updatedAt=Date.now();try{await saveMobilePrep('',{quiet:true});}catch(_){}renderMobileJourneyState();}
-  try{await navigateSafari(p.homepage);mobileToast(`已開啟 ${p.shortName||p.name}`,'good',1000);if(!globalThis.QBA_PWA)setTimeout(()=>{try{window.close();}catch(_){}},80);}catch(_){mobileToast(globalThis.QBA_PWA?'已選平台，可按前往繼續':'已選平台，請回 Safari 繼續','good');}
+  try{await navigateSafari(p.homepage,preopened);mobileToast(`已開啟 ${p.shortName||p.name}`,'good',1000);if(!globalThis.QBA_PWA)setTimeout(()=>{try{window.close();}catch(_){}},80);}catch(_){mobileToast(globalThis.QBA_PWA?'已選平台，可按前往繼續':'已選平台，請回 Safari 繼續','good');}
 }
 $('platformQuickPick')?.addEventListener('click',e=>{const b=e.target.closest?.('button[data-platform-id]');if(b?.dataset?.platformId)choosePlatform(b.dataset.platformId);});
 $('recentPlatformBtn')?.addEventListener('click',e=>{const id=e.currentTarget?.dataset?.platformId;if(id)choosePlatform(id);});
@@ -314,8 +315,9 @@ async function clearMobileTarget({keepPrep=true}={}){
 }
 async function reopenMobileTarget(){
   if(!mobilePrep.targetUrl)throw new Error('目前沒有目標網址。');
-  await rememberMobileTarget(mobilePrep.targetUrl,mobilePrep.platformId);
-  return navigateSafari(mobilePrep.targetUrl);
+  const preopened=preopenPwaTarget();
+  try{await rememberMobileTarget(mobilePrep.targetUrl,mobilePrep.platformId);return await navigateSafari(mobilePrep.targetUrl,preopened);}
+  catch(e){try{preopened?.close?.();}catch(_){}throw e;}
 }
 
 const MOBILE_PREP_KEY='qbaMobilePrepV1';
@@ -344,7 +346,8 @@ function renderMobileCountdown(){const el=$('mobileCountdown');if(!el)return;cle
 async function activeSafariTab(){if(globalThis.QBA_PWA){const m=normalizeMobilePrep((await api.storage.local.get(MOBILE_PREP_KEY))?.[MOBILE_PREP_KEY]||{});return m.targetUrl?{id:'pwa-target',url:m.targetUrl,title:'QuickBuy 目前目標'}:null;}try{const tabs=await api.tabs?.query?.({active:true,currentWindow:true});return tabs?.[0]||null;}catch(_){return null;}}
 function mobileHostPattern(url){try{const u=new URL(String(url||''));if(!/^https?:$/.test(u.protocol))return'';return `${u.protocol}//${u.host}/*`;}catch(_){return'';}}
 async function requestMobileSiteAccess({finish=false}={}){if(globalThis.QBA_PWA){if(finish)await finishMobileOnboarding();setMobileHomeStatus('QuickBuy PWA 已可使用；選平台後直接前往。','good');return true;}const perm=api?.permissions;if(!perm?.request){const help=$('mobilePermissionHelp');if(help){help.hidden=false;help.open=true;}mobileToast('請到 Safari 延伸功能允許網站存取','warn',2400);return false;}let tab=null;try{tab=await activeSafariTab();}catch(_){}const pattern=mobileHostPattern(tab?.url||'');const origins=pattern?[pattern]:['https://*/*','http://*/*'];let granted=false;try{granted=Boolean(await perm.request({origins}));}catch(_){granted=false;}if(!granted){const help=$('mobilePermissionHelp');if(help){help.hidden=false;help.open=true;}setMobileHomeStatus('Safari 尚未授權網站存取；可照上方步驟手動開啟。','warn');mobileToast('網站存取尚未允許','warn',2200);return false;}try{await loadMobilePrep();await adoptCurrentPage({manual:false,allowRecognizedAuto:true,reason:'permission-granted'});}catch(_){}setMobileHomeStatus('Safari 網站存取已允許。','good');mobileToast('Safari 網站存取已允許','good');if(finish)await finishMobileOnboarding();return true;}
-async function navigateSafari(url){const safe=cleanMobileTargetUrl(url);if(!safe)throw new Error('無效的網站網址。');if(globalThis.QBA_PWA){window.open(safe,'_blank','noopener,noreferrer');return true;}const tab=await activeSafariTab();try{if(tab?.id!=null&&api?.tabs?.update){await api.tabs.update(tab.id,{url:safe,active:true});return true;}}catch(_){}if(api?.tabs?.create){await api.tabs.create({url:safe,active:true});return true;}throw new Error('Safari 無法開啟這個網站。');}
+function preopenPwaTarget(){if(!globalThis.QBA_PWA)return null;try{const w=window.open('about:blank','_blank');if(w){try{w.opener=null;}catch(_){}}return w||null;}catch(_){return null;}}
+async function navigateSafari(url,preopened=null){const safe=cleanMobileTargetUrl(url);if(!safe){try{preopened?.close?.();}catch(_){}throw new Error('無效的網站網址。');}if(globalThis.QBA_PWA){if(preopened){try{preopened.location.replace(safe);return true;}catch(_){try{preopened.location.href=safe;return true;}catch(__){}}}const opened=window.open(safe,'_blank','noopener,noreferrer');if(!opened)throw new Error('瀏覽器擋住新分頁，請再按一次前往。');return true;}const tab=await activeSafariTab();try{if(tab?.id!=null&&api?.tabs?.update){await api.tabs.update(tab.id,{url:safe,active:true});return true;}}catch(_){}if(api?.tabs?.create){await api.tabs.create({url:safe,active:true});return true;}throw new Error('Safari 無法開啟這個網站。');}
 async function refreshMobileCurrentPage(){const tab=await activeSafariTab(),url=String(tab?.url||''),safeUrl=cleanMobileTargetUrl(url),p=globalThis.QBA_PLATFORM_CATALOG?.detect?.(url)||null,restricted=Boolean(tab)&&!safeUrl;if($('mobileCurrentPlatform'))$('mobileCurrentPlatform').textContent=p?.name||(safeUrl?'一般網站':restricted?'網站不可使用':'尚未選擇目標');if($('mobileCurrentTitle'))$('mobileCurrentTitle').textContent=String(tab?.title||'目前目標').slice(0,90);if($('mobileCurrentUrl')){try{$('mobileCurrentUrl').textContent=new URL(url).hostname;}catch(_){$('mobileCurrentUrl').textContent=restricted?'網站不可使用':'—';}}if($('mobileReadyPill')){$('mobileReadyPill').textContent=p?'平台已辨識':(safeUrl?'可使用':'需要確認');$('mobileReadyPill').style.background=p?'#e5f7ef':safeUrl?'#eef1f5':'#fff0cc';$('mobileReadyPill').style.color=p?'#176b4b':safeUrl?'#66758a':'#825b00';}const current={tab,p,url,safeUrl,restricted};renderMobileReadiness(current);return current;}
 async function adoptCurrentPage({manual=false,allowRecognizedAuto=true,reason='foreground'}={}){const current=await refreshMobileCurrentPage();if(!current.safeUrl){renderMobileJourneyState(current);if(manual){const msg=current.restricted?'QuickBuy 目前看不到這個 Safari 網站，請先確認網站存取權限。':'請先在 Safari 打開售票、商品或活動頁。';setMobileHomeStatus(msg,'warn');mobileToast(current.restricted?'先確認 Safari 網站權限':'先到 Safari 打開你要的頁面','warn');}return{...current,adopted:false};}
   const currentPlatform=current.p,targetPlatform=platformById(mobilePrep.platformId),hasTarget=Boolean(mobilePrep.targetUrl);let shouldAdopt=manual;
@@ -424,11 +427,12 @@ $('mobileRecentTargets')?.addEventListener('click',async e=>{
   const id=row.dataset.recentTargetId,x=mobileRecentTargets.find(v=>v.id===id);if(!x)return;
   if(btn.dataset.action==='delete'){mobileRecentTargets=mobileRecentTargets.filter(v=>v.id!==id);await saveMobileRecentTargets();return;}
   if(btn.dataset.action==='open'){
+    const preopened=preopenPwaTarget();
     mobilePrep.platformId=x.platformId||globalThis.QBA_PLATFORM_CATALOG?.detect?.(x.url)?.id||'';
     mobilePrep.targetUrl=x.url;mobilePrep.updatedAt=Date.now();
     await api.storage.local.set({[MOBILE_PREP_KEY]:mobilePrep});
     renderMobileJourneyState();showMobileView('home');
-    try{await navigateSafari(x.url);}catch(_){}
+    try{await navigateSafari(x.url,preopened);}catch(_){try{preopened?.close?.();}catch(__){}}
   }
 });
 loadMobileRecentTargets();
