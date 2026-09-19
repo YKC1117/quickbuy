@@ -161,6 +161,20 @@ jobs:
             if(pastedSaved?.platformId!=='shopee-tw') throw new Error(label+': pasted Shopee URL did not save shopee-tw');
             if(!String(pastedSaved?.targetUrl||'').startsWith('https://tw.shp.ee/')) throw new Error(label+': pasted Shopee target URL was not saved');
 
+            // Functional-query regression: momo product id must survive while token/tracking are removed immediately.
+            await page.locator('#platformUrl').fill('https://www.momoshop.com.tw/goods/GoodsDetail.jsp?i_code=123456&token=secret&utm_source=runtime');
+            await page.waitForTimeout(700);
+            const momoStatus=(await page.locator('#platformStatus').textContent()||'').trim();
+            if(!momoStatus.includes('momo') || !momoStatus.includes('購物平台')) throw new Error(label+': momo product URL was not recognized: '+momoStatus);
+            const momoInput=await page.locator('#platformUrl').inputValue();
+            if(momoInput!=='https://www.momoshop.com.tw/goods/GoodsDetail.jsp?i_code=123456') throw new Error(label+': momo URL cleanup broke functional query: '+momoInput);
+            const momoSaved=await page.evaluate(async()=>{
+              const r=await globalThis.QBA_PWA_API.storage.local.get('qbaMobilePrepV1');
+              return r?.qbaMobilePrepV1||null;
+            });
+            if(momoSaved?.platformId!=='momo') throw new Error(label+': momo URL did not save momo platform');
+            if(momoSaved?.targetUrl!=='https://www.momoshop.com.tw/goods/GoodsDetail.jsp?i_code=123456') throw new Error(label+': momo functional query was not preserved in target');
+
             await page.locator('#platformSearch').fill('拓元');
 
             const visibleButtons=page.locator('#platformQuickPick button:visible, #ticketPlatformQuickPick button:visible, #shoppingPlatformQuickPick button:visible');
@@ -216,9 +230,26 @@ jobs:
             if(!reopenEvents.some(x=>x.kind==='open'&&x.url==='about:blank')) throw new Error(label+': reopen target did not pre-open a PWA tab');
             if(!reopenEvents.some(x=>(x.kind==='replace'||x.kind==='href')&&/^https?:/.test(x.url))) throw new Error(label+': reopen target did not navigate pre-opened tab');
 
-            // Custom shortcut: create it through the real UI, then verify PWA pre-open navigation.
+            // PWA-only redundant "use current" button should remain hidden.
+            if(await page.locator('#mobileUseCurrentBtn').isVisible()) throw new Error(label+': redundant PWA use-current button is visible');
+
+            // Clipboard shortcut entry must prefill a sanitized functional URL.
             await page.locator('[data-mobile-tab="more"]').click();
             await page.locator('[data-mobile-view="more"]').waitFor({state:'visible'});
+            await page.evaluate(()=>{
+              Object.defineProperty(navigator,'clipboard',{
+                configurable:true,
+                value:{readText:async()=> 'momo 分享 https://www.momoshop.com.tw/goods/GoodsDetail.jsp?i_code=777888&token=secret&utm_source=clipboard'}
+              });
+            });
+            await page.locator('#saveCurrentShortcutBtn').click();
+            await page.locator('#shortcutForm').waitFor({state:'visible'});
+            const clipboardUrl=await page.locator('#shortcutUrl').inputValue();
+            if(clipboardUrl!=='https://www.momoshop.com.tw/goods/GoodsDetail.jsp?i_code=777888') throw new Error(label+': clipboard shortcut was not sanitized/prefilled: '+clipboardUrl);
+            await page.locator('#shortcutCancelBtn').click();
+            if(await page.locator('#shortcutForm').isVisible()) throw new Error(label+': clipboard shortcut form did not close');
+
+            // Custom shortcut: create it through the real UI, then verify PWA pre-open navigation.
             await page.locator('#addShortcutBtn').click();
             await page.locator('#shortcutForm').waitFor({state:'visible'});
             await page.locator('#shortcutName').fill('測試網站');
@@ -304,6 +335,8 @@ jobs:
           console.log('MOBILE_LIVE_RUNTIME_PASS');
           console.log('qty+/- PASS');
           console.log('pasted Shopee share URL detection PASS');
+          console.log('momo functional URL preservation PASS');
+          console.log('clipboard shortcut prefill PASS');
           console.log('fast target controls PASS');
           console.log('PWA pre-open navigation PASS');
           console.log('platform select + persistence PASS');
