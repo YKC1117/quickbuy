@@ -3,6 +3,7 @@ on:
   push:
     branches: [main]
     paths:
+      - 'docs/**'
       - '.github/workflows/mobile-visual-acceptance.yml'
   workflow_dispatch:
 permissions:
