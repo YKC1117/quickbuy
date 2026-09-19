@@ -35,3 +35,24 @@ if(normalized!=='https://tw.shp.ee/ABC123') throw new Error('share text URL extr
 
 console.log('PLATFORM_URL_DETECTION_PASS');
 console.log(JSON.stringify({cases:cases.length,shopeeAliases:true,shareTextExtraction:true}));
+
+
+const momoRaw='https://www.momoshop.com.tw/goods/GoodsDetail.jsp?i_code=123456&utm_source=share&token=secret#section';
+const momoSafe=c.sanitizeTargetUrl(momoRaw);
+if(momoSafe!=='https://www.momoshop.com.tw/goods/GoodsDetail.jsp?i_code=123456#section'){
+  throw new Error('momo functional query was not preserved safely: '+momoSafe);
+}
+
+const ticketRaw='https://ticketplus.com.tw/activity/123?eventId=456&session=secret&seat=A';
+const ticketSafe=c.sanitizeTargetUrl(ticketRaw);
+if(ticketSafe!=='https://ticketplus.com.tw/activity/123?eventId=456&seat=A'){
+  throw new Error('ticket functional query was not preserved safely: '+ticketSafe);
+}
+
+const hashSensitive=c.sanitizeTargetUrl('https://example.com/item?id=9#access_token=secret');
+if(hashSensitive!=='https://example.com/item?id=9'){
+  throw new Error('sensitive hash was not removed: '+hashSensitive);
+}
+
+console.log('URL_SANITIZE_PASS');
+console.log(JSON.stringify({functionalQueryPreserved:true,sensitiveParamsRemoved:true,trackingParamsRemoved:true}));
