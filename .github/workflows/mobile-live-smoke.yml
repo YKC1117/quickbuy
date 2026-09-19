@@ -242,17 +242,23 @@ jobs:
             });
             const savedShortcut=savedShortcuts.find(x=>x.name==='測試網站');
             if(savedShortcut?.url!=='https://example.com/runtime?item=123') throw new Error(label+': shortcut sanitizer did not preserve functional query safely');
+            const prepAfterShortcut=await page.evaluate(async()=>{
+              const r=await globalThis.QBA_PWA_API.storage.local.get('qbaMobilePrepV1');
+              return r?.qbaMobilePrepV1||null;
+            });
+            if(prepAfterShortcut?.targetUrl!=='https://example.com/runtime?item=123') throw new Error(label+': opening shortcut did not become current target');
+            if(prepAfterShortcut?.keyword!=='A區') throw new Error(label+': opening shortcut unexpectedly erased prep keyword');
             await page.locator('[data-mobile-tab="home"]').click();
             await page.locator('[data-mobile-view="home"]').waitFor({state:'visible'});
 
-            // Fast-control regression: refresh keeps state.
+            // Fast-control regression: refresh keeps the latest state.
             await page.locator('#mobileRefreshAppBtn').click();
             await page.waitForTimeout(300);
             const afterRefresh=await page.evaluate(async()=>{
               const r=await globalThis.QBA_PWA_API.storage.local.get('qbaMobilePrepV1');
               return r?.qbaMobilePrepV1||null;
             });
-            if(afterRefresh?.platformId!==savedAfter.platformId || afterRefresh?.keyword!=='A區') throw new Error(label+': refresh changed saved prep');
+            if(afterRefresh?.targetUrl!==prepAfterShortcut.targetUrl || afterRefresh?.platformId!==prepAfterShortcut.platformId || afterRefresh?.keyword!=='A區') throw new Error(label+': refresh changed latest saved prep');
 
             // Swap target should jump to URL input and clear only the URL field.
             await page.locator('#mobileSwapTargetBtn').click();
