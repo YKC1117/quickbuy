@@ -124,6 +124,12 @@ jobs:
           done
           test "$(ls docs/tutorial/*.png | wc -l)" -eq 6
           echo "TUTORIAL_SCREENSHOT_PASS"
+      - name: Upload tutorial screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: quickbuy-tutorial-screenshots
+          path: docs/tutorial/
+          if-no-files-found: error
       - name: Commit screenshots
         shell: bash
         run: |
