@@ -205,7 +205,7 @@ $('platformSearch')?.addEventListener('input',e=>{platformSearch=String(e.target
 const CUSTOM_SHORTCUTS_KEY='qbaCustomShortcutsV1';
 const SHORTCUT_CATEGORY_LABELS=Object.freeze({ticket:'售票',shop:'商城',event:'活動',other:'其他'});
 let customShortcuts=[],customShortcutFilter='all',customShortcutSearch='',editingShortcutId='';
-function sanitizeShortcutUrl(raw){try{const normalized=globalThis.QBA_PLATFORM_CATALOG?.normalizeUrlInput?.(raw)||String(raw||'').trim();const u=new URL(normalized);if(!/^https?:$/.test(u.protocol))return'';u.username='';u.password='';u.search='';u.hash='';return `${u.origin}${u.pathname||'/'}`;}catch(_){return'';}}
+function sanitizeShortcutUrl(raw){return globalThis.QBA_PLATFORM_CATALOG?.sanitizeTargetUrl?.(raw)||'';}
 function normalizeShortcutCategory(v){v=String(v||'').trim().toLowerCase();return Object.prototype.hasOwnProperty.call(SHORTCUT_CATEGORY_LABELS,v)?v:'other';}
 function inferShortcutCategory(url,title=''){try{const known=globalThis.QBA_PLATFORM_CATALOG?.detect?.(url);if(known)return known.category==='shopping'?'shop':'ticket';const u=new URL(url),text=`${u.hostname} ${u.pathname} ${title}`.toLowerCase();if(/(?:shop|store|mall|product|merch|goods|商品|商城|商店)/i.test(text))return'shop';if(/(?:event|activity|show|expo|展覽|活動|展演)/i.test(text))return'event';}catch(_){}return'other';}
 function shortcutNameFallback(url,title=''){const clean=String(title||'').replace(/\s+/g,' ').trim();if(clean)return clean.slice(0,40);try{return new URL(url).hostname.replace(/^www\./,'').slice(0,40);}catch(_){return'我的網站';}}
@@ -323,7 +323,7 @@ async function reopenMobileTarget(){
 const MOBILE_PREP_KEY='qbaMobilePrepV1';
 let mobilePrep={quantity:1,keyword:'',targetAt:'',platformId:'',targetUrl:'',updatedAt:0};
 let mobileCountdownTimer=0,mobilePrepSaveTimer=0,mobileResumeTimer=0,mobileToastTimer=0;
-function cleanMobileTargetUrl(raw){try{const normalized=globalThis.QBA_PLATFORM_CATALOG?.normalizeUrlInput?.(raw)||String(raw||'').trim();const u=new URL(normalized);if(!/^https?:$/.test(u.protocol))return'';u.username='';u.password='';u.search='';u.hash='';return `${u.origin}${u.pathname||'/'}`;}catch(_){return'';}}
+function cleanMobileTargetUrl(raw){return globalThis.QBA_PLATFORM_CATALOG?.sanitizeTargetUrl?.(raw)||'';}
 function normalizeMobilePrep(raw={}){const q=Math.max(1,Math.min(10,Number(raw.quantity||1)|0));return{quantity:q,keyword:String(raw.keyword||'').trim().slice(0,80),targetAt:String(raw.targetAt||'').slice(0,32),platformId:String(raw.platformId||'').slice(0,80),targetUrl:cleanMobileTargetUrl(raw.targetUrl||''),updatedAt:Number(raw.updatedAt||0)};}
 function platformById(id){return (globalThis.QBA_PLATFORM_CATALOG?.list?.()||[]).find(x=>x.id===id)||null;}
 function mobileToast(message,tone='good',ttl=1800){const el=$('mobileToast');if(!el)return;clearTimeout(mobileToastTimer);el.hidden=false;el.className=`mobile-toast ${tone} show`;el.textContent=String(message||'');mobileToastTimer=setTimeout(()=>{el.classList.remove('show');setTimeout(()=>{if(!el.classList.contains('show'))el.hidden=true;},200);},ttl);}function hideMobileToast(){clearTimeout(mobileToastTimer);const el=$('mobileToast');if(el){el.classList.remove('show');el.hidden=true;}}
