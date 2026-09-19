@@ -1,6 +1,6 @@
 (() => {
   const REVIEWED_AT = "2026-09-18";
-  const CATALOG_VERSION = "1.5.0";
+  const CATALOG_VERSION = "1.6.0";
 
   const PLATFORM_CATALOG = [
     {
@@ -121,6 +121,23 @@
       return u.toString();
     } catch (_) { return ""; }
   }
+  const SENSITIVE_QUERY_KEY = /^(?:token|access_token|refresh_token|auth|authorization|session|sessionid|sid|jwt|otp|password|passwd|cvv|cvc|api[_-]?key|apikey)$/i;
+  const TRACKING_QUERY_KEY = /^(?:utm_.+|fbclid|gclid|dclid|msclkid|igshid|share_channel_code)$/i;
+  function sanitizeTargetUrl(raw) {
+    const normalized = normalizeUrlInput(raw);
+    if (!normalized) return "";
+    try {
+      const u = new URL(normalized);
+      for (const key of [...u.searchParams.keys()]) {
+        if (SENSITIVE_QUERY_KEY.test(key) || TRACKING_QUERY_KEY.test(key)) u.searchParams.delete(key);
+      }
+      const hash = String(u.hash || "");
+      if (/(?:^|[#&?])(token|access_token|refresh_token|auth|authorization|session|sessionid|sid|jwt|otp|password|passwd|api[_-]?key|apikey)=/i.test(hash)) u.hash = "";
+      u.username = "";
+      u.password = "";
+      return u.toString();
+    } catch (_) { return ""; }
+  }
   function detect(urlString) {
     const normalized = normalizeUrlInput(urlString);
     if (!normalized) return null;
@@ -149,5 +166,5 @@
       { id:"shopping-checkout-human-confirm", platform:"shopping", input:"送出訂單 / 付款確認", expected:"NEED_USER", rule:"購物平台最終送單與付款維持人工確認" }
     ];
   }
-  globalThis.QBA_PLATFORM_CATALOG = Object.freeze({ VERSION:CATALOG_VERSION, REVIEWED_AT, normalizeUrlInput, detect, list, compact, statusLabel, regressionCases });
+  globalThis.QBA_PLATFORM_CATALOG = Object.freeze({ VERSION:CATALOG_VERSION, REVIEWED_AT, normalizeUrlInput, sanitizeTargetUrl, detect, list, compact, statusLabel, regressionCases });
 })();
