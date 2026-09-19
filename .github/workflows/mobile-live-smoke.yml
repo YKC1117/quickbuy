@@ -216,24 +216,32 @@ jobs:
             if(!reopenEvents.some(x=>x.kind==='open'&&x.url==='about:blank')) throw new Error(label+': reopen target did not pre-open a PWA tab');
             if(!reopenEvents.some(x=>(x.kind==='replace'||x.kind==='href')&&/^https?:/.test(x.url))) throw new Error(label+': reopen target did not navigate pre-opened tab');
 
-            // Custom shortcut must also pre-open before async persistence.
-            await page.evaluate(async()=>{
-              const now=Date.now();
-              await globalThis.QBA_PWA_API.storage.local.set({
-                qbaCustomShortcutsV1:[{id:'runtime-shortcut',name:'測試網站',url:'https://example.com/runtime',category:'other',pinned:false,createdAt:now,lastUsedAt:0,updatedAt:now}]
-              });
-            });
+            // Custom shortcut: create it through the real UI, then verify PWA pre-open navigation.
             await page.locator('[data-mobile-tab="more"]').click();
             await page.locator('[data-mobile-view="more"]').waitFor({state:'visible'});
-            await page.waitForTimeout(250);
-            const shortcutOpen=page.locator('#shortcutList [data-shortcut-id="runtime-shortcut"] button[data-action="open"]');
-            if(await shortcutOpen.count()<1) throw new Error(label+': custom shortcut did not render');
+            await page.locator('#addShortcutBtn').click();
+            await page.locator('#shortcutForm').waitFor({state:'visible'});
+            await page.locator('#shortcutName').fill('測試網站');
+            await page.locator('#shortcutUrl').fill('https://example.com/runtime?item=123&token=secret');
+            await page.locator('#shortcutCategory').selectOption('');
+            await page.locator('#shortcutSaveBtn').click();
+            await page.waitForTimeout(300);
+            if(await page.locator('#shortcutForm').isVisible()) throw new Error(label+': shortcut form did not close after save');
+            const shortcutCard=page.locator('#shortcutList .shortcut-card').filter({hasText:'測試網站'}).first();
+            if(await shortcutCard.count()<1) throw new Error(label+': custom shortcut did not render after UI save');
+            const shortcutOpen=shortcutCard.locator('button[data-action="open"]');
             const opensBeforeShortcut=await page.evaluate(()=>window.__qbOpenEvents.length);
             await shortcutOpen.click();
             await page.waitForTimeout(250);
             const shortcutEvents=await page.evaluate(n=>window.__qbOpenEvents.slice(n),opensBeforeShortcut);
             if(!shortcutEvents.some(x=>x.kind==='open'&&x.url==='about:blank')) throw new Error(label+': shortcut did not pre-open a PWA tab');
-            if(!shortcutEvents.some(x=>(x.kind==='replace'||x.kind==='href')&&/^https?:/.test(x.url))) throw new Error(label+': shortcut did not navigate pre-opened tab');
+            if(!shortcutEvents.some(x=>(x.kind==='replace'||x.kind==='href')&&x.url==='https://example.com/runtime?item=123')) throw new Error(label+': shortcut did not preserve functional query or navigate pre-opened tab');
+            const savedShortcuts=await page.evaluate(async()=>{
+              const r=await globalThis.QBA_PWA_API.storage.local.get('qbaCustomShortcutsV1');
+              return r?.qbaCustomShortcutsV1||[];
+            });
+            const savedShortcut=savedShortcuts.find(x=>x.name==='測試網站');
+            if(savedShortcut?.url!=='https://example.com/runtime?item=123') throw new Error(label+': shortcut sanitizer did not preserve functional query safely');
             await page.locator('[data-mobile-tab="home"]').click();
             await page.locator('[data-mobile-view="home"]').waitFor({state:'visible'});
 
