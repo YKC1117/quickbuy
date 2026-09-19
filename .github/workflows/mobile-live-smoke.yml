@@ -11,6 +11,7 @@ permissions:
 jobs:
   smoke:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - name: Verify deployed files match repository
@@ -48,10 +49,9 @@ jobs:
       - name: Run iPhone-size interaction smoke
         shell: bash
         run: |
-          mkdir -p acceptance-shots
           cat > quickbuy-smoke.mjs <<'EOF'
           import { chromium } from 'playwright-core';
-          import { existsSync, writeFileSync } from 'fs';
+          import { existsSync } from 'fs';
 
           const candidates=[
             '/usr/bin/google-chrome',
@@ -76,11 +76,6 @@ jobs:
               userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1'
             });
             const page=await context.newPage();
-            const cdp=await context.newCDPSession(page);
-            async function shot(name){
-              const out=await cdp.send('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:false});
-              writeFileSync('acceptance-shots/'+label+'-'+name+'.png',Buffer.from(out.data,'base64'));
-            }
             const errors=[];
             const badCore=[];
             page.on('pageerror',e=>errors.push('pageerror: '+e.message));
@@ -104,7 +99,6 @@ jobs:
             }
 
             await page.locator('[data-mobile-view="home"]').waitFor({state:'visible'});
-            await shot('01-home');
             const qty=page.locator('#mobileQty');
             if(await qty.inputValue()!=='1') throw new Error(label+': initial qty is not 1');
 
@@ -132,7 +126,6 @@ jobs:
             });
             if(pastedSaved?.platformId!=='shopee-tw') throw new Error(label+': pasted Shopee URL did not save shopee-tw');
             if(!String(pastedSaved?.targetUrl||'').startsWith('https://tw.shp.ee/')) throw new Error(label+': pasted Shopee target URL was not saved');
-            await shot('02-shopee-detected');
 
             await page.locator('#platformSearch').fill('拓元');
 
@@ -184,13 +177,11 @@ jobs:
               return r?.qbaMobilePrepV1||null;
             });
             if(afterRefresh?.platformId!==savedAfter.platformId || afterRefresh?.keyword!=='A區') throw new Error(label+': refresh changed saved prep');
-            await shot('03-after-refresh');
 
             // Swap target should jump to URL input and clear only the URL field.
             await page.locator('#mobileSwapTargetBtn').click();
             await page.locator('[data-mobile-view="platforms"]').waitFor({state:'visible'});
             if((await page.locator('#platformUrl').inputValue())!=='') throw new Error(label+': swap target did not clear URL input');
-            await shot('04-swap-target');
 
             // Pasted Shopee URL creates a recent target.
             await page.locator('#platformUrl').fill('https://tw.shp.ee/TestFast123');
@@ -199,7 +190,6 @@ jobs:
             await page.locator('[data-mobile-view="home"]').waitFor({state:'visible'});
             const recentRows=page.locator('#mobileRecentTargets [data-recent-target-id]');
             if(await recentRows.count()<1) throw new Error(label+': recent target was not created');
-            await shot('05-recent-target');
 
             // Delete one recent target.
             const beforeDelete=await recentRows.count();
@@ -207,7 +197,6 @@ jobs:
             await page.waitForTimeout(200);
             const afterDelete=await page.locator('#mobileRecentTargets [data-recent-target-id]').count();
             if(afterDelete!==beforeDelete-1) throw new Error(label+': recent target delete failed');
-            await shot('06-after-delete');
 
             // Clear target keeps quantity and keyword.
             await page.locator('#mobileClearTargetBtn').click();
@@ -218,7 +207,6 @@ jobs:
             });
             if(cleared?.platformId || cleared?.targetUrl) throw new Error(label+': clear target did not clear platform/url');
             if(cleared?.quantity!==1 || cleared?.keyword!=='A區') throw new Error(label+': clear target erased prep unexpectedly');
-            await shot('07-after-clear');
 
             if(errors.length) throw new Error(label+' '+errors.join('\n'));
             if(badCore.length) throw new Error(label+' core resource failures: '+badCore.join(', '));
@@ -241,11 +229,3 @@ jobs:
           await browser.close();
           EOF
           node quickbuy-smoke.mjs
-
-      - name: Upload acceptance screenshots
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: mobile-acceptance-shots
-          path: acceptance-shots/
-          if-no-files-found: error
