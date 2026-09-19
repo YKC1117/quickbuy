@@ -19,9 +19,19 @@ jobs:
         run: |
           set -euo pipefail
           base="https://ykc1117.github.io/quickbuy"
+          wait_match() {
+            local f="$1"
+            for i in $(seq 1 30); do
+              if curl -fsSL "$base/$f?smoke=${GITHUB_SHA}-$i" -o "/tmp/$f" && cmp -s "docs/$f" "/tmp/$f"; then
+                return 0
+              fi
+              sleep 3
+            done
+            echo "Timed out waiting for deployed $f to match repository"
+            return 1
+          }
           for f in index.html dashboard.js pwa-boot.js pwa-adapter.js platform-catalog.js sync-core.js sync-crypto.js sync-provider.js sw.js manifest.webmanifest; do
-            curl -fsSL --retry 5 --retry-delay 2 "$base/$f?smoke=${GITHUB_SHA}" -o "/tmp/$f"
-            cmp "docs/$f" "/tmp/$f"
+            wait_match "$f"
           done
           echo "LIVE_FILE_MATCH_PASS"
           curl -fsSL --retry 5 --retry-delay 2 "$base/tutorial.html?smoke=${GITHUB_SHA}" -o /tmp/tutorial.html
