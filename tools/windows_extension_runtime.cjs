@@ -100,7 +100,7 @@ async function open(){
    if(!chromeSettings){chromeSettings=await context.newPage();await chromeSettings.goto('chrome://extensions/');}
    await chromeSettings.bringToFront();
    await new Promise((resolve,reject)=>{
-     const child=spawn('powershell.exe',['-NoProfile','-File',path.resolve('tools/click_chrome_extension_action.ps1'),'-ExtensionName',manifest.name,'-ProcessName','chrome']);
+     const child=spawn('powershell.exe',['-NoProfile','-File',path.resolve('tools/click_chrome_extension_action.ps1'),'-ExtensionName',manifest.name,'-ProcessName','chrome','-ArtifactDir',out]);
      child.stdout.on('data',d=>console.log(String(d)));child.stderr.on('data',d=>console.error(String(d)));
      child.on('error',reject);child.on('close',code=>code===0?resolve():reject(Error('Native Chrome extension action failed '+code)));
    });
