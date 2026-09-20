@@ -97,7 +97,8 @@ jobs:
           const openBtn=page.locator('#platformOpenTargetBtn');
           if(!(await openBtn.isVisible())) throw new Error('Tutorial direct-open button missing');
           if(!((await openBtn.textContent())||'').includes('momo')) throw new Error('Tutorial direct-open button label mismatch');
-          await page.locator('#platformUrl').scrollIntoViewIfNeeded();
+          await openBtn.evaluate(el=>el.scrollIntoView({block:'center',behavior:'instant'}));
+          await page.waitForTimeout(150);
           await shot('docs/tutorial/03-url.png');
 
           await page.locator('[data-mobile-tab="home"]').click();
