@@ -167,7 +167,10 @@ jobs:
             });
             if(oneTapSaved?.platformId!=='shopee-tw'||oneTapSaved?.targetUrl!=='https://tw.shp.ee/HomePaste123') throw new Error(label+': one-tap home paste did not save target');
 
-            await page.locator('#mobileClearTargetBtn').click().catch(()=>{});
+            await page.locator('[data-mobile-tab="home"]').click();
+            await page.locator('[data-mobile-view="home"]').waitFor({state:'visible'});
+            await page.locator('#mobileClearTargetBtn').click();
+            await page.waitForTimeout(200);
             await page.locator('[data-mobile-tab="platforms"]').click();
             await page.locator('[data-mobile-view="platforms"]').waitFor({state:'visible'});
 
