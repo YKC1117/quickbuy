@@ -261,14 +261,16 @@ jobs:
             // Custom shortcut: create it through the real UI, then verify PWA pre-open navigation.
             await page.locator('#addShortcutBtn').click();
             await page.locator('#shortcutForm').waitFor({state:'visible'});
-            await page.locator('#shortcutName').fill('測試網站');
+            const maliciousShortcutName='測試<svg/onload=alert(1)>';
+            await page.locator('#shortcutName').fill(maliciousShortcutName);
             await page.locator('#shortcutUrl').fill('https://example.com/runtime?item=123&token=secret');
             await page.locator('#shortcutCategory').selectOption('');
             await page.locator('#shortcutSaveBtn').click();
             await page.waitForTimeout(300);
             if(await page.locator('#shortcutForm').isVisible()) throw new Error(label+': shortcut form did not close after save');
-            const shortcutCard=page.locator('#shortcutList .shortcut-card').filter({hasText:'測試網站'}).first();
-            if(await shortcutCard.count()<1) throw new Error(label+': custom shortcut did not render after UI save');
+            if(await page.locator('#shortcutList svg, #shortcutList img').count()>0) throw new Error(label+': shortcut renderer created HTML from user-controlled name');
+            const shortcutCard=page.locator('#shortcutList .shortcut-card').filter({hasText:maliciousShortcutName}).first();
+            if(await shortcutCard.count()<1) throw new Error(label+': custom shortcut did not render literal user-controlled text after UI save');
             const shortcutOpen=shortcutCard.locator('button[data-action="open"]');
             const opensBeforeShortcut=await page.evaluate(()=>window.__qbOpenEvents.length);
             await shortcutOpen.click();
@@ -280,7 +282,7 @@ jobs:
               const r=await globalThis.QBA_PWA_API.storage.local.get('qbaCustomShortcutsV1');
               return r?.qbaCustomShortcutsV1||[];
             });
-            const savedShortcut=savedShortcuts.find(x=>x.name==='測試網站');
+            const savedShortcut=savedShortcuts.find(x=>x.name===maliciousShortcutName);
             if(savedShortcut?.url!=='https://example.com/runtime?item=123') throw new Error(label+': shortcut sanitizer did not preserve functional query safely');
             const prepAfterShortcut=await page.evaluate(async()=>{
               const r=await globalThis.QBA_PWA_API.storage.local.get('qbaMobilePrepV1');
@@ -347,6 +349,7 @@ jobs:
           console.log('momo functional URL preservation PASS');
           console.log('detected target direct-open PASS');
           console.log('clipboard shortcut prefill PASS');
+          console.log('user-controlled renderer XSS regression PASS');
           console.log('fast target controls PASS');
           console.log('PWA pre-open navigation PASS');
           console.log('platform select + persistence PASS');
