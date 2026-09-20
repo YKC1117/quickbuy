@@ -57,6 +57,7 @@ async function discoverExtensionIdFromManager(settings,timeout=8000){
 }
 async function open(){
  context=await chromium.launchPersistentContext(profile,{channel:browserName,headless:browserName==='chromium',ignoreDefaultArgs:['--disable-extensions'],args:[`--disable-extensions-except=${ext}`,`--load-extension=${ext}`,'--enable-unsafe-extension-debugging'],viewport:{width:520,height:1000}});
+ let chromeSettings=null;
  context.on('console',m=>{if(m.type()==='error'&&m.location().url.startsWith(`chrome-extension://${id}/`))report.errors.push(m.text());});
  context.on('weberror',e=>report.errors.push(e.error().stack));
  // Official builds may reject load-extension. Ask the browser's documented CDP unpacked loader as a second path.
@@ -66,7 +67,7 @@ async function open(){
    await session.detach();
  }
  if(browserName==='chrome' && !context.serviceWorkers().some(w=>w.url()===`chrome-extension://${id}/background.js`)){
-   const settings=await context.newPage();await settings.goto('chrome://extensions/');
+   const settings=chromeSettings=await context.newPage();await settings.goto('chrome://extensions/');
    const toggle=settings.locator('#devMode');await toggle.waitFor();
    if(!await toggle.evaluate(e=>e.checked))await toggle.click();
    settings.on('filechooser',async chooser=>{console.log('Browser directory chooser intercepted');await chooser.setFiles(ext);});
@@ -86,10 +87,22 @@ async function open(){
    }else{
      console.log('Chrome manager/profile did not expose unpacked extension id; using manifest-derived id '+id);
    }
-   await settings.close();
  }
- page=await context.newPage();
- await page.goto(`chrome-extension://${id}/sidepanel.html`);
+ const extensionPageUrl=`chrome-extension://${id}/sidepanel.html`;
+ if(browserName==='chrome'){
+   if(!chromeSettings){chromeSettings=await context.newPage();await chromeSettings.goto('chrome://extensions/');}
+   await chromeSettings.bringToFront();
+   await new Promise((resolve,reject)=>{
+     const child=spawn('powershell.exe',['-NoProfile','-File',path.resolve('tools/navigate_browser_address.ps1'),'-Url',extensionPageUrl,'-ProcessName','chrome']);
+     child.stdout.on('data',d=>console.log(String(d)));child.stderr.on('data',d=>console.error(String(d)));
+     child.on('error',reject);child.on('close',code=>code===0?resolve():reject(Error('Native Chrome address navigation failed '+code)));
+   });
+   page=chromeSettings;
+   await until(()=>page.url()===extensionPageUrl&&page,15000);
+ }else{
+   page=await context.newPage();
+   await page.goto(extensionPageUrl);
+ }
  await page.locator('#simpleTargetUrl').waitFor();
  await until(async()=>(await msg('QBA_SELF_TEST_PING')).ok);
  const backgroundContexts=await until(()=>page.evaluate(async()=>{try{const rows=await chrome.runtime.getContexts({contextTypes:['BACKGROUND']});return rows.length?rows:null}catch(_){return null}}),20000);
