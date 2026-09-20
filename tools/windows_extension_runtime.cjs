@@ -101,9 +101,15 @@ async function waitLaunched(mission){return until(async()=>{const r=await local(
  const url='https://example.com/quickbuy-runtime?item=one';
  // A local response avoids contacting a checkout platform. Chrome tabs and alarms stay real.
  await context.route('https://example.com/**',route=>route.fulfill({body:'<title>QuickBuy runtime fixture</title><h1>Manual checkout only</h1>'}));
- let r=await arm(url,3600,4000);assert.ok(r.ok);await waitLaunched(r.mission);
- let tabs=await page.evaluate(()=>chrome.tabs.query({}));assert.equal(tabs.filter(t=>t.url==='https://example.com/quickbuy-runtime?item=one').length,1);pass('60-minute lead real alarm fires and opens target');
- r=await arm(url,60,4000);await waitLaunched(r.mission);tabs=await page.evaluate(()=>chrome.tabs.query({}));assert.equal(tabs.filter(t=>t.url=== 'https://example.com/quickbuy-runtime?item=one').length,1);pass('Second alarm reuses exact target tab');
+ let r=await arm(url,3600,4000);assert.ok(r.ok);const firstLaunch=await waitLaunched(r.mission);
+ const firstTab=await until(()=>page.evaluate(async id=>{try{return await chrome.tabs.get(id)}catch(_){return null}},firstLaunch.tabId));
+ assert.equal(await page.evaluate(x=>QBA_PLATFORM_CATALOG.sanitizeTargetUrl(x),firstTab.pendingUrl||firstTab.url||''),url);
+ pass('60-minute lead real alarm fires and opens target',{tabId:firstLaunch.tabId,url:firstTab.pendingUrl||firstTab.url||''});
+ r=await arm(url,60,4000);const secondLaunch=await waitLaunched(r.mission);
+ const secondTab=await until(()=>page.evaluate(async id=>{try{return await chrome.tabs.get(id)}catch(_){return null}},secondLaunch.tabId));
+ assert.equal(await page.evaluate(x=>QBA_PLATFORM_CATALOG.sanitizeTargetUrl(x),secondTab.pendingUrl||secondTab.url||''),url);
+ assert.equal(secondLaunch.tabId,firstLaunch.tabId);
+ pass('Second alarm reuses exact target tab',{tabId:secondLaunch.tabId});
  r=await arm('https://example.com/cancelled',60,3000);await msg('QBA_DISARM_MISSION');await page.waitForTimeout(4500);assert.ok(!(await page.evaluate(()=>chrome.tabs.query({}))).some(t=>t.url.includes('/cancelled')));pass('Cancelled reminder stays cancelled past due time');
  r=await arm('https://example.com/expired',60,60000);
  await page.evaluate(async()=>{const {qbaArmedMission:m}=await chrome.storage.local.get('qbaArmedMission');m.saleTimeTs=Date.now()-10000;m.startAt=Date.now()-20000;m.graceMs=0;await chrome.storage.local.set({qbaArmedMission:m});await chrome.alarms.create('qbaScheduledMission',{when:Date.now()+1000});});
