@@ -64,3 +64,19 @@ if(expandedSensitive!=='https://example.com/item?i_code=123&eventId=456&seat=A')
 }
 console.log('EXPANDED_SENSITIVE_URL_PASS');
 console.log(JSON.stringify({expandedSensitive:true,functionalParamsStillPreserved:true}));
+
+
+const usernameSafe=c.sanitizeTargetUrl('https://example.com/item?i_code=321&username=user@example.com&eventId=9');
+if(usernameSafe!=='https://example.com/item?i_code=321&eventId=9'){
+  throw new Error('username query privacy stripping failed: '+usernameSafe);
+}
+const encodedHashSafe=c.sanitizeTargetUrl('https://example.com/item?id=1#access%5Ftoken=secret');
+if(encodedHashSafe!=='https://example.com/item?id=1'){
+  throw new Error('encoded sensitive hash stripping failed: '+encodedHashSafe);
+}
+const jwtHashSafe=c.sanitizeTargetUrl('https://example.com/item?id=1#payload=eyJabc.def.ghi');
+if(jwtHashSafe!=='https://example.com/item?id=1'){
+  throw new Error('JWT-like hash stripping failed: '+jwtHashSafe);
+}
+console.log('WINDOWS_PRIVACY_PARITY_PASS');
+console.log(JSON.stringify({usernameQueryRemoved:true,encodedHashRemoved:true,jwtHashRemoved:true}));
