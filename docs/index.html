@@ -26,7 +26,7 @@
 
 .quick-tools{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px}
 .quick-tools button{min-height:44px}
-.target-history{display:grid;gap:7px;margin-top:10px}
+.target-history-head{display:flex;justify-content:space-between;align-items:center;margin-top:10px;color:#71839b;font-size:11px}.target-history-clear{border:0;background:transparent;color:#2c62a3;padding:4px 2px;font-size:11px;font-weight:800}.target-history{display:grid;gap:7px;margin-top:6px}
 .target-history-row{display:grid;grid-template-columns:minmax(0,1fr) 42px;gap:7px}
 .target-history-open{border:1px solid var(--line,#dce4ee);background:#fff;border-radius:12px;padding:10px;text-align:left;min-width:0}
 .target-history-open b{display:block;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -59,7 +59,7 @@
 <button class="soft" id="mobileReopenTargetBtn" type="button">↗ 重新開啟目標</button>
 <button class="ghost" id="mobileRefreshAppBtn" type="button">↻ 重新整理 QuickBuy</button>
 </div>
-<div class="target-history" id="mobileRecentTargets"></div>
+<div class="target-history-head" hidden="" id="mobileRecentTargetsHead"><span>最近目標</span><button class="target-history-clear" id="mobileClearRecentTargetsBtn" type="button">清除最近</button></div><div class="target-history" id="mobileRecentTargets"></div>
 <details class="permission-help" id="mobilePermissionHelp"><summary>iPhone 最簡單用法</summary><div class="optional-body"><ol><li>Safari 開啟 QuickBuy 後，按分享。</li><li>選「加入主畫面」。</li><li>之後直接從主畫面打開 QuickBuy，設定好再按前往平台。</li></ol><p class="tiny" style="margin:8px 0 0">免費 PWA 無法讀取或控制另一個 Safari 分頁；登入、驗證碼、排隊、付款與最後送出仍由你操作。</p></div></details>
 <div class="next-action" id="mobileNextAction">
 <div class="next-label">現在建議</div><div class="next-title" id="mobileNextActionTitle">正在檢查 Safari…</div><div class="next-detail" id="mobileNextActionDetail">QuickBuy 會自動判斷下一步。</div>
