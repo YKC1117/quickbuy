@@ -55,6 +55,10 @@ async function waitLaunched(mission){return until(async()=>{const r=await local(
  pass('MV3 unpacked extension and exact worker',{workerUrl:worker.url(),userAgent:await page.evaluate(()=>navigator.userAgent)});
  assert.equal(await page.evaluate(()=>chrome.runtime.id),id);assert.ok(await page.locator('#simpleTargetUrl').isVisible());
  assert.equal((await page.evaluate(()=>chrome.sidePanel.getOptions({}))).path,'sidepanel.html');pass('Sidepanel document and API');
+
+ // Let first-run onboarding finish, then close through its real button.
+ await page.waitForTimeout(500);
+ const close=page.locator('#onboardingCloseBtn');if(await close.isVisible())await close.click();
  if(browserName!=='chromium'){
    await page.evaluate(async()=>{const w=await chrome.windows.getCurrent();const b=document.createElement('button');b.id='runtimeOpenSidePanel';b.textContent='Open native Side Panel';b.onclick=()=>chrome.sidePanel.open({windowId:w.id});document.body.prepend(b);});
    await page.locator('#runtimeOpenSidePanel').click();
@@ -63,9 +67,6 @@ async function waitLaunched(mission){return until(async()=>{const r=await local(
    await page.evaluate(()=>document.getElementById('runtimeOpenSidePanel').remove());
  }
 
- // Let first-run onboarding finish, then close through its real button.
- await page.waitForTimeout(500);
- const close=page.locator('#onboardingCloseBtn');if(await close.isVisible())await close.click();
  const allIds=await page.locator('[id]').evaluateAll(es=>es.map(e=>e.id));assert.equal(new Set(allIds).size,allIds.length);pass('No duplicate DOM IDs');
  const missing=await page.evaluate(()=>fieldIds.filter(id=>!document.getElementById(id)));assert.deepEqual(missing,[]);pass('All persisted field IDs exist');
  const ticket=page.locator('#simpleTicketPlatformQuickPick button');const shops=page.locator('#simpleShoppingPlatformQuickPick button');

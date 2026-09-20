@@ -14,12 +14,15 @@ if(!$dialog){
   foreach($w in $windows){Write-Host ($w.Current.ClassName+' | '+$w.Current.Name)}
   throw 'Native unpacked-extension folder picker did not open'
 }
-$dialog.SetFocus()
-[System.Windows.Forms.SendKeys]::SendWait('^l')
+$edits=$dialog.FindAll([System.Windows.Automation.TreeScope]::Descendants,(New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty,[System.Windows.Automation.ControlType]::Edit)))
+$folderEdit=$null
+foreach($edit in $edits){
+  Write-Host ('Picker edit: '+$edit.Current.Name+' / '+$edit.Current.AutomationId)
+  if($edit.Current.Name -match '^Folder:|^File name:'){$folderEdit=$edit;break}
+}
+if(!$folderEdit){throw 'Folder path edit field not found'}
+$folderEdit.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue($ExtensionPath)
 Start-Sleep -Milliseconds 200
-[System.Windows.Forms.SendKeys]::SendWait($ExtensionPath)
-[System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
-Start-Sleep -Milliseconds 500
 $button=$dialog.FindFirst([System.Windows.Automation.TreeScope]::Descendants,(New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty,'Select Folder')))
 if(!$button){throw 'Select Folder button not found in native picker'}
 $button.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
