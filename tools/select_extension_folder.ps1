@@ -71,14 +71,6 @@ if($button.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Patte
   Write-Host 'Select Folder invoked through InvokePattern'
 }
 if(!$clicked){
-  $pattern=$null
-  if($button.TryGetCurrentPattern([System.Windows.Automation.LegacyIAccessiblePattern]::Pattern,[ref]$pattern)){
-    $pattern.DoDefaultAction()
-    $clicked=$true
-    Write-Host 'Select Folder invoked through LegacyIAccessible'
-  }
-}
-if(!$clicked){
   $rect=$button.Current.BoundingRectangle
   if($rect.Width -le 0 -or $rect.Height -le 0){throw 'Select Folder button has no clickable bounds'}
   $x=[int]($rect.Left + ($rect.Width/2))
