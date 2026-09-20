@@ -99,6 +99,15 @@ foreach ($button in $buttons) {
   if (-not $rightToolbarCandidate -and $automationId -eq "view_1007") {
     $rightToolbarCandidate = $button
   }
+  if (-not $directQuickBuyButton -and $name -match [regex]::Escape($ExtensionName)) {
+    $directQuickBuyButton = $button
+  }
+}
+
+if ($directQuickBuyButton) {
+  Click-UiaElement -Element $directQuickBuyButton -Label ($ExtensionName + " pinned action")
+  Write-Host ("Chrome extension action activated directly from toolbar: " + $ExtensionName)
+  exit 0
 }
 
 $launcher = $namedExtensions
