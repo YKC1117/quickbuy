@@ -28,12 +28,13 @@ async function open(){
    const settings=await context.newPage();await settings.goto('chrome://extensions/');
    const toggle=settings.locator('#devMode');await toggle.waitFor();
    if(!await toggle.evaluate(e=>e.checked))await toggle.click();
+   settings.on('filechooser',async chooser=>{console.log('Browser directory chooser intercepted');await chooser.setFiles(ext);});
    const picker=new Promise((resolve,reject)=>{
      const child=spawn('powershell.exe',['-NoProfile','-File',path.resolve('tools/select_extension_folder.ps1'),'-ExtensionPath',ext]);
      child.stdout.on('data',d=>console.log(String(d)));child.stderr.on('data',d=>console.error(String(d)));
      child.on('error',reject);child.on('close',code=>code===0?resolve():reject(Error('Folder picker failed '+code)));
    });
-   await Promise.all([picker,settings.locator('#loadUnpacked').click()]);
+   await Promise.all([picker,settings.locator('#loadUnpacked').click()]).catch(async error=>{await settings.screenshot({path:path.join(out,'chrome-install-failure.png'),fullPage:true});throw error;});
    await settings.screenshot({path:path.join(out,'unpacked-install.png'),fullPage:true});
    await settings.close();
  }
@@ -54,6 +55,14 @@ async function waitLaunched(mission){return until(async()=>{const r=await local(
  pass('MV3 unpacked extension and exact worker',{workerUrl:worker.url(),userAgent:await page.evaluate(()=>navigator.userAgent)});
  assert.equal(await page.evaluate(()=>chrome.runtime.id),id);assert.ok(await page.locator('#simpleTargetUrl').isVisible());
  assert.equal((await page.evaluate(()=>chrome.sidePanel.getOptions({}))).path,'sidepanel.html');pass('Sidepanel document and API');
+ if(browserName!=='chromium'){
+   await page.evaluate(async()=>{const w=await chrome.windows.getCurrent();const b=document.createElement('button');b.id='runtimeOpenSidePanel';b.textContent='Open native Side Panel';b.onclick=()=>chrome.sidePanel.open({windowId:w.id});document.body.prepend(b);});
+   await page.locator('#runtimeOpenSidePanel').click();
+   const panels=await until(()=>page.evaluate(async()=>{const c=await chrome.runtime.getContexts({contextTypes:['SIDE_PANEL']});return c.length&&c;}));
+   pass('Native Side Panel context opened',panels.map(c=>c.contextType));
+   await page.evaluate(()=>document.getElementById('runtimeOpenSidePanel').remove());
+ }
+
  // Let first-run onboarding finish, then close through its real button.
  await page.waitForTimeout(500);
  const close=page.locator('#onboardingCloseBtn');if(await close.isVisible())await close.click();
@@ -106,7 +115,7 @@ async function waitLaunched(mission){return until(async()=>{const r=await local(
  await context.close();await open();assert.equal((await msg('QBA_GET_ARMED_MISSION')).mission.id,r.mission.id);pass('Browser restart retains valid future reminder');await msg('QBA_DISARM_MISSION');
  // Reload extension itself, then navigate a fresh extension document.
  r=await arm(url,60,60000);
- await page.evaluate(()=>{setTimeout(()=>chrome.runtime.reload(),50);});await page.waitForTimeout(1000);await page.goto(`chrome-extension://${id}/sidepanel.html`);await until(async()=>(await msg('QBA_SELF_TEST_PING')).ok);
+ await page.evaluate(()=>{setTimeout(()=>chrome.runtime.reload(),50);});await new Promise(r=>setTimeout(r,1500));page=await context.newPage();await page.goto(`chrome-extension://${id}/sidepanel.html`);await until(async()=>(await msg('QBA_SELF_TEST_PING')).ok);
  const reloadResult=await msg('QBA_GET_ARMED_MISSION');assert.ok(!reloadResult.mission||reloadResult.mission.id===r.mission.id);await msg('QBA_DISARM_MISSION');pass('Extension reload never executes future task early');
  assert.equal((await msg('QBA_UNKNOWN_TEST')).ok,false);assert.equal((await msg('QBA_LAUNCH_ARMED_MISSION_NOW')).ok,false);pass('Unknown messages and early manual launch fail closed');
  // Concurrent reconciliation/cancel must not recreate the cancelled alarm.
