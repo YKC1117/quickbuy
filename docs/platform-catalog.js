@@ -121,7 +121,7 @@
       return u.toString();
     } catch (_) { return ""; }
   }
-  const SENSITIVE_QUERY_KEY = /^(?:token|access_token|refresh_token|auth|authorization|session|sessionid|sid|jwt|otp|password|passwd|cvv|cvc|api[_-]?key|apikey)$/i;
+  const SENSITIVE_QUERY_KEY = /^(?:token|access[_-]?token|refresh[_-]?token|id[_-]?token|auth(?:orization)?(?:[_-]?token)?|session(?:[_-]?(?:id|key|token))?|sid|jwt|otp|password|passwd|cvv|cvc|api[_-]?key|apikey|secret|client[_-]?secret)$/i;
   const TRACKING_QUERY_KEY = /^(?:utm_.+|fbclid|gclid|dclid|msclkid|igshid|share_channel_code)$/i;
   function sanitizeTargetUrl(raw) {
     const normalized = normalizeUrlInput(raw);
@@ -132,7 +132,7 @@
         if (SENSITIVE_QUERY_KEY.test(key) || TRACKING_QUERY_KEY.test(key)) u.searchParams.delete(key);
       }
       const hash = String(u.hash || "");
-      if (/(?:^|[#&?])(token|access_token|refresh_token|auth|authorization|session|sessionid|sid|jwt|otp|password|passwd|api[_-]?key|apikey)=/i.test(hash)) u.hash = "";
+      if (/(?:^|[#&?])(token|access[_-]?token|refresh[_-]?token|id[_-]?token|auth(?:orization)?(?:[_-]?token)?|session(?:[_-]?(?:id|key|token))?|sid|jwt|otp|password|passwd|api[_-]?key|apikey|secret|client[_-]?secret)=/i.test(hash)) u.hash = "";
       u.username = "";
       u.password = "";
       return u.toString();
