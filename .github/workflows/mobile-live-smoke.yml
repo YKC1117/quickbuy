@@ -144,6 +144,30 @@ jobs:
             await page.locator('#mobileKeyword').fill('A區');
             await page.locator('#mobileKeyword').blur();
 
+            // First-use speed regression: Home "貼網址" should read clipboard and auto-detect in one tap when no target exists.
+            await page.evaluate(()=>{
+              Object.defineProperty(navigator,'clipboard',{
+                configurable:true,
+                value:{readText:async()=> '蝦皮分享 https://tw.shp.ee/HomePaste123'}
+              });
+            });
+            const homePasteBtn=page.locator('#mobileSwapTargetBtn');
+            const homePasteText=(await homePasteBtn.textContent()||'').trim();
+            if(!homePasteText.includes('貼網址')) throw new Error(label+': first-use home action is not paste URL');
+            await homePasteBtn.click();
+            await page.locator('[data-mobile-view="platforms"]').waitFor({state:'visible'});
+            await page.waitForTimeout(500);
+            const oneTapUrl=await page.locator('#platformUrl').inputValue();
+            if(oneTapUrl!=='https://tw.shp.ee/HomePaste123') throw new Error(label+': one-tap home paste did not normalize clipboard URL: '+oneTapUrl);
+            const oneTapStatus=(await page.locator('#platformStatus').textContent()||'').trim();
+            if(!oneTapStatus.includes('蝦皮')||!oneTapStatus.includes('購物平台')) throw new Error(label+': one-tap home paste did not detect Shopee: '+oneTapStatus);
+            const oneTapSaved=await page.evaluate(async()=>{
+              const r=await globalThis.QBA_PWA_API.storage.local.get('qbaMobilePrepV1');
+              return r?.qbaMobilePrepV1||null;
+            });
+            if(oneTapSaved?.platformId!=='shopee-tw'||oneTapSaved?.targetUrl!=='https://tw.shp.ee/HomePaste123') throw new Error(label+': one-tap home paste did not save target');
+
+            await page.locator('#mobileClearTargetBtn').click().catch(()=>{});
             await page.locator('[data-mobile-tab="platforms"]').click();
             await page.locator('[data-mobile-view="platforms"]').waitFor({state:'visible'});
 
@@ -347,6 +371,7 @@ jobs:
           console.log('MOBILE_LIVE_RUNTIME_PASS');
           console.log('qty+/- PASS');
           console.log('pasted Shopee share URL detection PASS');
+          console.log('home one-tap clipboard URL PASS');
           console.log('momo functional URL preservation PASS');
           console.log('detected target direct-open PASS');
           console.log('clipboard shortcut prefill PASS');
