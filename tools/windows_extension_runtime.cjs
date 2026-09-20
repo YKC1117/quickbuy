@@ -10,6 +10,13 @@ const browserName=process.env.QBA_BROWSER||'chromium';
 const out=path.resolve('runtime-results',browserName);fs.mkdirSync(out,{recursive:true});
 const report={browser:browserName,os:os.platform(),commit:process.env.GITHUB_SHA||'local',expectedExtensionId:expectedId,extensionId:id,checks:[],errors:[],limitations:['Sidepanel document and sidePanel API are tested; native toolbar docking still needs visual acceptance.','60-minute lead is tested with sale time 60 minutes ahead; this is not a 60-minute wall-clock soak.']};
 const profile=fs.mkdtempSync(path.join(os.tmpdir(),'quickbuy-runtime-'));
+if(browserName==='chrome'){
+ const defaultDir=path.join(profile,'Default');fs.mkdirSync(defaultDir,{recursive:true});
+ fs.writeFileSync(path.join(defaultDir,'Preferences'),JSON.stringify({
+   extensions:{pinned_by_default:true,pinned_extensions:[expectedId]}
+ }));
+ console.log('Seeded Chrome test profile to pin QuickBuy action: '+expectedId);
+}
 let context,page,worker,cdp;
 function pass(name,detail){report.checks.push({name,result:'PASS',detail});console.log('PASS '+name);}
 async function until(fn,timeout=15000){const start=Date.now();while(Date.now()-start<timeout){const value=await fn();if(value)return value;await new Promise(r=>setTimeout(r,150));}throw Error('Condition timed out');}
