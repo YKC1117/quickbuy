@@ -326,6 +326,7 @@ async function rememberMobileTarget(url,platformId=''){
 }
 function renderMobileRecentTargets(){
   const host=$('mobileRecentTargets');if(!host)return;
+  const head=$('mobileRecentTargetsHead');if(head)head.hidden=!mobileRecentTargets.length;
   host.replaceChildren();
   if(!mobileRecentTargets.length){const e=document.createElement('div');e.className='target-history-empty';e.textContent='還沒有最近目標';host.append(e);return;}
   for(const x of mobileRecentTargets){
@@ -479,6 +480,12 @@ $('clearPlatformUrlBtn')?.addEventListener('click',()=>{
   const input=$('platformUrl');if(input){input.value='';input.focus();}
   updatePlatformOpenTargetButton();
   if($('platformStatus'))$('platformStatus').textContent='網址已清除；可直接貼新的連結。';
+});
+$('mobileClearRecentTargetsBtn')?.addEventListener('click',async()=>{
+  mobileRecentTargets=[];
+  try{await api.storage.local.remove(MOBILE_RECENT_TARGETS_KEY);}catch(_){}
+  renderMobileRecentTargets();
+  mobileToast('最近目標已清除','good',1200);
 });
 $('mobileRecentTargets')?.addEventListener('click',async e=>{
   const row=e.target.closest?.('[data-recent-target-id]'),btn=e.target.closest?.('button[data-action]');if(!row||!btn)return;
