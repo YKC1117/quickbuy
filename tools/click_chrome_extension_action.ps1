@@ -1,11 +1,14 @@
 param(
   [string]$ExtensionName = "QuickBuy",
-  [string]$ProcessName = "chrome"
+  [string]$ProcessName = "chrome",
+  [string]$ArtifactDir = ""
 )
 
 $ErrorActionPreference = "Stop"
 Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
+Add-Type -AssemblyName System.Drawing
+Add-Type -AssemblyName System.Windows.Forms
 Add-Type @"
 using System;
 using System.Runtime.InteropServices;
@@ -16,6 +19,61 @@ public static class QbaToolbarNative {
   [DllImport("user32.dll")] public static extern void mouse_event(uint dwFlags, uint dx, uint dy, uint dwData, UIntPtr dwExtraInfo);
 }
 "@
+
+function Save-DesktopShot {
+  param([string]$Stage)
+  if (-not $ArtifactDir) { return }
+  New-Item -ItemType Directory -Force -Path $ArtifactDir | Out-Null
+  $bounds=[System.Windows.Forms.SystemInformation]::VirtualScreen
+  $bmp=New-Object System.Drawing.Bitmap $bounds.Width,$bounds.Height
+  $g=[System.Drawing.Graphics]::FromImage($bmp)
+  try {
+    $g.CopyFromScreen($bounds.Left,$bounds.Top,0,0,$bmp.Size)
+    $bmp.Save((Join-Path $ArtifactDir ("chrome-native-" + $Stage + ".png")),[System.Drawing.Imaging.ImageFormat]::Png)
+  } finally { $g.Dispose(); $bmp.Dispose() }
+}
+
+function Get-PatternNames {
+  param($Element)
+  $names=@()
+  foreach($entry in @(
+    @("Invoke",[System.Windows.Automation.InvokePattern]::Pattern),
+    @("ExpandCollapse",[System.Windows.Automation.ExpandCollapsePattern]::Pattern),
+    @("SelectionItem",[System.Windows.Automation.SelectionItemPattern]::Pattern),
+    @("Toggle",[System.Windows.Automation.TogglePattern]::Pattern)
+  )){
+    $p=$null
+    try { if($Element.TryGetCurrentPattern($entry[1],[ref]$p)){ $names += $entry[0] } } catch {}
+  }
+  return ($names -join ",")
+}
+
+function Save-UiaSnapshot {
+  param([string]$Stage,[int]$BrowserPid)
+  $root=[System.Windows.Automation.AutomationElement]::RootElement
+  $all=$root.FindAll([System.Windows.Automation.TreeScope]::Descendants,[System.Windows.Automation.Condition]::TrueCondition)
+  $rows=@()
+  foreach($e in $all){
+    try {
+      $pid=[int]$e.Current.ProcessId
+      $type=[string]$e.Current.ControlType.ProgrammaticName
+      if($pid -ne $BrowserPid -and $type -notin @("ControlType.Window","ControlType.Menu","ControlType.MenuItem","ControlType.Pane","ControlType.ListItem","ControlType.Text","ControlType.Button")){ continue }
+      $rect=$e.Current.BoundingRectangle
+      $rows += [pscustomobject]@{
+        ControlType=$type; Name=[string]$e.Current.Name; AutomationId=[string]$e.Current.AutomationId;
+        ClassName=[string]$e.Current.ClassName; ProcessId=$pid; IsEnabled=[bool]$e.Current.IsEnabled;
+        IsOffscreen=[bool]$e.Current.IsOffscreen; BoundingRectangle=("$($rect.Left),$($rect.Top),$($rect.Width),$($rect.Height)");
+        Patterns=(Get-PatternNames $e)
+      }
+    } catch {}
+  }
+  if($ArtifactDir){
+    New-Item -ItemType Directory -Force -Path $ArtifactDir | Out-Null
+    $rows | ConvertTo-Json -Depth 3 | Set-Content -Encoding UTF8 (Join-Path $ArtifactDir ("chrome-uia-" + $Stage + ".json"))
+  }
+  Write-Host ("UIA snapshot " + $Stage + ": " + $rows.Count + " nodes")
+  Save-DesktopShot -Stage $Stage
+}
 
 function Click-UiaElement {
   param(
@@ -73,9 +131,11 @@ while ((Get-Date) -lt $deadline -and -not $proc) {
 if (-not $proc) { throw "Browser window not found for process $ProcessName" }
 
 $hwnd = [IntPtr]$proc.MainWindowHandle
-[QbaToolbarNative]::ShowWindow($hwnd,5) | Out-Null
+[QbaToolbarNative]::ShowWindow($hwnd,3) | Out-Null
 [QbaToolbarNative]::SetForegroundWindow($hwnd) | Out-Null
-Start-Sleep -Milliseconds 300
+Start-Sleep -Milliseconds 700
+Write-Host ("Chrome PID: " + $proc.Id + " / HWND: " + $proc.MainWindowHandle)
+Save-UiaSnapshot -Stage "before-menu" -BrowserPid $proc.Id
 
 $window = [System.Windows.Automation.AutomationElement]::FromHandle($hwnd)
 $buttonCondition = New-Object System.Windows.Automation.PropertyCondition(
@@ -123,6 +183,7 @@ if (-not $launcher) { throw "No Chrome extension launcher candidate found" }
 
 Click-UiaElement -Element $launcher -Label $launcherLabel
 Start-Sleep -Milliseconds 700
+Save-UiaSnapshot -Stage "launcher-open" -BrowserPid $proc.Id
 
 if ($usedRightToolbarMenu) {
   $root = [System.Windows.Automation.AutomationElement]::RootElement
@@ -144,6 +205,7 @@ if ($usedRightToolbarMenu) {
   if (-not $extensionsMenuItem) { throw "Chrome Extensions item not found in right-toolbar menu" }
   Click-UiaElement -Element $extensionsMenuItem -Label "Chrome Extensions menu item"
   Start-Sleep -Milliseconds 700
+  Save-UiaSnapshot -Stage "extensions-open" -BrowserPid $proc.Id
 }
 
 $candidates = @(Get-VisibleQuickBuyCandidates -Name $ExtensionName)
@@ -156,7 +218,8 @@ if ($candidates.Count -eq 0) {
       Write-Host ("Post-launch UI: " + [string]$element.Current.ControlType.ProgrammaticName + " | " + $label + " | " + [string]$element.Current.AutomationId)
     }
   }
-  throw "QuickBuy did not appear after opening Chrome extension launcher"
+  Save-UiaSnapshot -Stage "action-missing" -BrowserPid $proc.Id
+  throw "QuickBuy action did not appear after opening Chrome extension launcher"
 }
 
 $target = $candidates |
