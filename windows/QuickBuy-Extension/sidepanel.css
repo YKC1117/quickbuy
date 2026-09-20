@@ -417,7 +417,7 @@ body.simple-active .simple-start-card .simple-step-head { margin-bottom:6px; }
 body.simple-active .simple-start-card .simple-step-head small { display:none; }
 body.simple-active .simple-start-card .simple-main-action { min-height:48px; margin-top:0; font-size:14px; }
 body.simple-active .simple-start-card .simple-wide:disabled { display:none; }
-body.simple-active .simple-advanced-link { display:none; }
+body.simple-active .simple-advanced-link { display:block; }
 body.simple-active #simpleSetupCard.is-collapsed { padding:10px 12px; }
 body.simple-active #simpleSetupCard.is-collapsed .simple-step-head { margin-bottom:6px; }
 body.simple-active .simple-setup-summary > div { padding:8px 9px; }

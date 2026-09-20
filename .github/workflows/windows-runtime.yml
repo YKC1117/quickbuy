@@ -26,6 +26,8 @@ jobs:
       - name: Install Chrome for Testing
         if: matrix.browser == 'chromium'
         run: npx playwright install chromium
+      - name: Verify tested source hashes
+        run: python tools/package_windows.py --verify
       - name: Verify shared functional URL rules
         run: node tools/test_windows_urls.cjs
       - name: Real unpacked extension acceptance

@@ -1,5 +1,6 @@
 // Real browser/extension integration tests. Never mock chrome.* or invoke alarm handlers.
 const {chromium}=require('playwright');
+const {spawn}=require('node:child_process');
 const fs=require('node:fs'), path=require('node:path'), os=require('node:os'), crypto=require('node:crypto'), assert=require('node:assert/strict');
 const ext=path.resolve('windows/QuickBuy-Extension');
 const manifest=JSON.parse(fs.readFileSync(path.join(ext,'manifest.json')));
@@ -23,11 +24,24 @@ async function open(){
    try{await session.send('Extensions.loadUnpacked',{path:ext});}catch(error){console.log('CDP unpacked loader: '+error.message);}
    await session.detach();
  }
+ if(browserName==='chrome' && !context.serviceWorkers().some(w=>w.url()===`chrome-extension://${id}/background.js`)){
+   const settings=await context.newPage();await settings.goto('chrome://extensions/');
+   const toggle=settings.locator('#devMode');await toggle.waitFor();
+   if(!await toggle.evaluate(e=>e.checked))await toggle.click();
+   const picker=new Promise((resolve,reject)=>{
+     const child=spawn('powershell.exe',['-NoProfile','-File',path.resolve('tools/select_extension_folder.ps1'),'-ExtensionPath',ext]);
+     child.stdout.on('data',d=>console.log(String(d)));child.stderr.on('data',d=>console.error(String(d)));
+     child.on('error',reject);child.on('close',code=>code===0?resolve():reject(Error('Folder picker failed '+code)));
+   });
+   await Promise.all([picker,settings.locator('#loadUnpacked').click()]);
+   await settings.screenshot({path:path.join(out,'unpacked-install.png'),fullPage:true});
+   await settings.close();
+ }
  worker=await until(()=>context.serviceWorkers().find(w=>w.url()===`chrome-extension://${id}/background.js`),20000);
  page=await context.newPage();await page.goto(`chrome-extension://${id}/sidepanel.html`);
  await page.locator('#simpleTargetUrl').waitFor();
  await until(async()=>(await msg('QBA_SELF_TEST_PING')).ok);
- cdp=await context.newCDPSession(page);await cdp.send('ServiceWorker.enable');
+ cdp=await context.newCDPSession(page);cdp.on('ServiceWorker.workerErrorReported',e=>report.errors.push(JSON.stringify(e)));await cdp.send('ServiceWorker.enable');
  // Keep worker exceptions in the same report, including tasks after suspension.
  const versions=new Map();cdp.on('ServiceWorker.workerVersionUpdated',event=>{for(const v of event.versions)versions.set(v.versionId,v);});
  open.versions=versions;
@@ -100,4 +114,4 @@ async function waitLaunched(mission){return until(async()=>{const r=await local(
  const integrity=await page.evaluate(()=>verifyBuildManifest());assert.ok(integrity.ok,JSON.stringify(integrity.mismatches));pass('Loaded source build hashes verified');
  await page.screenshot({path:path.join(out,'final.png'),fullPage:true});
  assert.deepEqual(report.errors,[]);pass('No captured console or page runtime errors');report.result='PASS';
- }catch(error){report.result='FAIL';report.failure=error.stack;console.error(error);process.exitCode=1;}finally{if(context)await context.close().catch(()=>{});fs.writeFileSync(path.join(out,'report.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));fs.rmSync(profile,{recursive:true,force:true,maxRetries:3});}})();
+ }catch(error){if(page)await page.screenshot({path:path.join(out,'failure.png'),fullPage:true}).catch(()=>{});report.result='FAIL';report.failure=error.stack;console.error(error);process.exitCode=1;}finally{if(context)await context.close().catch(()=>{});fs.writeFileSync(path.join(out,'report.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));fs.rmSync(profile,{recursive:true,force:true,maxRetries:3});}})();
