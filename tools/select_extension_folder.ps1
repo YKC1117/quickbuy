@@ -38,8 +38,7 @@ $buttons=$dialog.FindAll([System.Windows.Automation.TreeScope]::Descendants,(New
 $button=$null
 foreach($candidate in $buttons){
   Write-Host ('Picker button: '+$candidate.Current.Name+' / '+$candidate.Current.AutomationId)
-  if(!$button -and $candidate.Current.Name -match '^(Select Folder|Select|Open|Choose)
-){$button=$candidate}
+  if(!$button -and $candidate.Current.Name -match 'Select Folder|Select|Open|Choose' -and $candidate.Current.Name -notmatch 'Cancel'){$button=$candidate}
 }
 if(!$button){
   $button=$dialog.FindFirst([System.Windows.Automation.TreeScope]::Descendants,(New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::AutomationIdProperty,'1')))
