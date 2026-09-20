@@ -3,6 +3,14 @@ $ErrorActionPreference='Stop'
 Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
 Add-Type -AssemblyName System.Windows.Forms
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public static class QuickBuyWin32 {
+  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+}
+"@
 $deadline=(Get-Date).AddSeconds(25)
 $dialog=$null
 while((Get-Date) -lt $deadline -and !$dialog){
@@ -25,7 +33,11 @@ if($folderEdit){
   Write-Host 'Folder path entered through accessibility ValuePattern'
 }else{
   Write-Host 'Folder edit field not exposed; using Windows address-bar keyboard fallback'
-  $dialog.SetFocus()
+  $handle=[IntPtr]$dialog.Current.NativeWindowHandle
+  [void][QuickBuyWin32]::ShowWindow($handle,5)
+  $foreground=[QuickBuyWin32]::SetForegroundWindow($handle)
+  Write-Host ('SetForegroundWindow: '+$foreground+' / handle '+$handle)
+  Start-Sleep -Milliseconds 250
   [System.Windows.Forms.Clipboard]::SetText($ExtensionPath)
   [System.Windows.Forms.SendKeys]::SendWait('^l')
   Start-Sleep -Milliseconds 250
