@@ -4,16 +4,41 @@ const {spawn}=require('node:child_process');
 const fs=require('node:fs'), path=require('node:path'), os=require('node:os'), crypto=require('node:crypto'), assert=require('node:assert/strict');
 const ext=path.resolve('windows/QuickBuy-Extension');
 const manifest=JSON.parse(fs.readFileSync(path.join(ext,'manifest.json')));
-const id=[...crypto.createHash('sha256').update(Buffer.from(manifest.key,'base64')).digest('hex').slice(0,32)].map(c=>String.fromCharCode(97+parseInt(c,16))).join('');
+const expectedId=[...crypto.createHash('sha256').update(Buffer.from(manifest.key,'base64')).digest('hex').slice(0,32)].map(c=>String.fromCharCode(97+parseInt(c,16))).join('');
+let id=expectedId;
 const browserName=process.env.QBA_BROWSER||'chromium';
 const out=path.resolve('runtime-results',browserName);fs.mkdirSync(out,{recursive:true});
-const report={browser:browserName,os:os.platform(),commit:process.env.GITHUB_SHA||'local',extensionId:id,checks:[],errors:[],limitations:['Sidepanel document and sidePanel API are tested; native toolbar docking still needs visual acceptance.','60-minute lead is tested with sale time 60 minutes ahead; this is not a 60-minute wall-clock soak.']};
+const report={browser:browserName,os:os.platform(),commit:process.env.GITHUB_SHA||'local',expectedExtensionId:expectedId,extensionId:id,checks:[],errors:[],limitations:['Sidepanel document and sidePanel API are tested; native toolbar docking still needs visual acceptance.','60-minute lead is tested with sale time 60 minutes ahead; this is not a 60-minute wall-clock soak.']};
 const profile=fs.mkdtempSync(path.join(os.tmpdir(),'quickbuy-runtime-'));
 let context,page,worker,cdp;
 function pass(name,detail){report.checks.push({name,result:'PASS',detail});console.log('PASS '+name);}
 async function until(fn,timeout=15000){const start=Date.now();while(Date.now()-start<timeout){const value=await fn();if(value)return value;await new Promise(r=>setTimeout(r,150));}throw Error('Condition timed out');}
 async function msg(type,data={}){return page.evaluate(async x=>chrome.runtime.sendMessage(x),{type,...data});}
 async function local(key){return page.evaluate(async key=>(await chrome.storage.local.get(key))[key],key);}
+function samePath(a,b){
+ try{return path.resolve(String(a||'')).toLowerCase()===path.resolve(String(b||'')).toLowerCase()}catch(_){return false}
+}
+async function discoverInstalledExtensionId(timeout=8000){
+ const candidates=[
+   path.join(profile,'Default','Secure Preferences'),
+   path.join(profile,'Default','Preferences')
+ ];
+ const started=Date.now();
+ while(Date.now()-started<timeout){
+   for(const file of candidates){
+     try{
+       if(!fs.existsSync(file))continue;
+       const json=JSON.parse(fs.readFileSync(file,'utf8'));
+       const settings=json?.extensions?.settings||{};
+       for(const [candidate,meta] of Object.entries(settings)){
+         if(meta?.path&&samePath(meta.path,ext))return candidate;
+       }
+     }catch(_){}
+   }
+   await new Promise(r=>setTimeout(r,200));
+ }
+ return '';
+}
 async function open(){
  context=await chromium.launchPersistentContext(profile,{channel:browserName,headless:browserName==='chromium',ignoreDefaultArgs:['--disable-extensions'],args:[`--disable-extensions-except=${ext}`,`--load-extension=${ext}`,'--enable-unsafe-extension-debugging'],viewport:{width:520,height:1000}});
  context.on('console',m=>{if(m.type()==='error'&&m.location().url.startsWith(`chrome-extension://${id}/`))report.errors.push(m.text());});
@@ -36,6 +61,14 @@ async function open(){
    });
    await Promise.all([picker,settings.locator('#loadUnpacked').click()]).catch(async error=>{await settings.screenshot({path:path.join(out,'chrome-install-failure.png'),fullPage:true});throw error;});
    await settings.screenshot({path:path.join(out,'unpacked-install.png'),fullPage:true});
+   const discovered=await discoverInstalledExtensionId();
+   if(discovered){
+     id=discovered;
+     report.extensionId=id;
+     console.log('Discovered Chrome unpacked extension id: '+id+(id===expectedId?' (matches manifest key)':' (differs from manifest key)'));
+   }else{
+     console.log('Chrome profile did not expose unpacked extension id; using manifest-derived id '+id);
+   }
    await settings.close();
  }
  page=await context.newPage();
