@@ -93,12 +93,24 @@ async function open(){
    if(!chromeSettings){chromeSettings=await context.newPage();await chromeSettings.goto('chrome://extensions/');}
    await chromeSettings.bringToFront();
    await new Promise((resolve,reject)=>{
-     const child=spawn('powershell.exe',['-NoProfile','-File',path.resolve('tools/navigate_browser_address.ps1'),'-Url',extensionPageUrl,'-ProcessName','chrome']);
+     const child=spawn('powershell.exe',['-NoProfile','-File',path.resolve('tools/click_chrome_extension_action.ps1'),'-ExtensionName',manifest.name,'-ProcessName','chrome']);
      child.stdout.on('data',d=>console.log(String(d)));child.stderr.on('data',d=>console.error(String(d)));
-     child.on('error',reject);child.on('close',code=>code===0?resolve():reject(Error('Native Chrome address navigation failed '+code)));
+     child.on('error',reject);child.on('close',code=>code===0?resolve():reject(Error('Native Chrome extension action failed '+code)));
    });
-   page=chromeSettings;
-   await until(()=>page.url()===extensionPageUrl&&page,15000);
+   const probe=await context.newCDPSession(chromeSettings);
+   const sideTarget=await until(async()=>{
+     const {targetInfos}=await probe.send('Target.getTargets');
+     const found=targetInfos.find(t=>t.url===extensionPageUrl);
+     if(found)return found;
+     return null;
+   },15000);
+   console.log('Chrome native Side Panel target: '+JSON.stringify({targetId:sideTarget.targetId,type:sideTarget.type,url:sideTarget.url,title:sideTarget.title}));
+   await probe.detach();
+   page=context.pages().find(p=>p.url()===extensionPageUrl)||null;
+   if(!page){
+     console.log('Chrome side panel target is not exposed as a Playwright Page. Context pages: '+JSON.stringify(context.pages().map(p=>p.url())));
+     throw Error('Native Chrome Side Panel opened but is not exposed as a Playwright Page');
+   }
  }else{
    page=await context.newPage();
    await page.goto(extensionPageUrl);
