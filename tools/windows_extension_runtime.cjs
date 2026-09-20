@@ -39,6 +39,22 @@ async function discoverInstalledExtensionId(timeout=8000){
  }
  return '';
 }
+async function discoverExtensionIdFromManager(settings,timeout=8000){
+ const started=Date.now();
+ while(Date.now()-started<timeout){
+   try{
+     const rows=await settings.locator('extensions-item').evaluateAll(items=>items.map(item=>({
+       id:item.getAttribute('id')||item.data?.id||'',
+       name:item.data?.name||item.shadowRoot?.querySelector('#name')?.textContent?.trim()||''
+     })));
+     if(rows.length)console.log('Chrome extensions manager items: '+JSON.stringify(rows));
+     const exact=rows.find(row=>row.name==="QuickBuy"||row.id===expectedId);
+     if(exact?.id)return exact.id;
+   }catch(error){console.log('Chrome extensions manager probe: '+error.message);}
+   await new Promise(r=>setTimeout(r,200));
+ }
+ return '';
+}
 async function open(){
  context=await chromium.launchPersistentContext(profile,{channel:browserName,headless:browserName==='chromium',ignoreDefaultArgs:['--disable-extensions'],args:[`--disable-extensions-except=${ext}`,`--load-extension=${ext}`,'--enable-unsafe-extension-debugging'],viewport:{width:520,height:1000}});
  context.on('console',m=>{if(m.type()==='error'&&m.location().url.startsWith(`chrome-extension://${id}/`))report.errors.push(m.text());});
@@ -61,13 +77,14 @@ async function open(){
    });
    await Promise.all([picker,settings.locator('#loadUnpacked').click()]).catch(async error=>{await settings.screenshot({path:path.join(out,'chrome-install-failure.png'),fullPage:true});throw error;});
    await settings.screenshot({path:path.join(out,'unpacked-install.png'),fullPage:true});
-   const discovered=await discoverInstalledExtensionId();
+   let discovered=await discoverExtensionIdFromManager(settings);
+   if(!discovered)discovered=await discoverInstalledExtensionId();
    if(discovered){
      id=discovered;
      report.extensionId=id;
      console.log('Discovered Chrome unpacked extension id: '+id+(id===expectedId?' (matches manifest key)':' (differs from manifest key)'));
    }else{
-     console.log('Chrome profile did not expose unpacked extension id; using manifest-derived id '+id);
+     console.log('Chrome manager/profile did not expose unpacked extension id; using manifest-derived id '+id);
    }
    await settings.close();
  }
