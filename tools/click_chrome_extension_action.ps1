@@ -55,13 +55,13 @@ function Save-UiaSnapshot {
   $rows=@()
   foreach($e in $all){
     try {
-      $pid=[int]$e.Current.ProcessId
+      $elementPid=[int]$e.Current.ProcessId
       $type=[string]$e.Current.ControlType.ProgrammaticName
-      if($pid -ne $BrowserPid -and $type -notin @("ControlType.Window","ControlType.Menu","ControlType.MenuItem","ControlType.Pane","ControlType.ListItem","ControlType.Text","ControlType.Button")){ continue }
+      if($elementPid -ne $BrowserPid -and $type -notin @("ControlType.Window","ControlType.Menu","ControlType.MenuItem","ControlType.Pane","ControlType.ListItem","ControlType.Text","ControlType.Button")){ continue }
       $rect=$e.Current.BoundingRectangle
       $rows += [pscustomobject]@{
         ControlType=$type; Name=[string]$e.Current.Name; AutomationId=[string]$e.Current.AutomationId;
-        ClassName=[string]$e.Current.ClassName; ProcessId=$pid; IsEnabled=[bool]$e.Current.IsEnabled;
+        ClassName=[string]$e.Current.ClassName; ProcessId=$elementPid; IsEnabled=[bool]$e.Current.IsEnabled;
         IsOffscreen=[bool]$e.Current.IsOffscreen; BoundingRectangle=("$($rect.Left),$($rect.Top),$($rect.Width),$($rect.Height)");
         Patterns=(Get-PatternNames $e)
       }
@@ -203,7 +203,43 @@ if ($usedRightToolbarMenu) {
     }
   }
   if (-not $extensionsMenuItem) { throw "Chrome Extensions item not found in right-toolbar menu" }
-  Click-UiaElement -Element $extensionsMenuItem -Label "Chrome Extensions menu item"
+  # The first "Extensions" entry in Chrome's main menu is a submenu launcher.
+  # Run 35512554527 proves its child menu contains Manage Extensions / Extensions /
+  # Visit Chrome Web Store.  Opening that submenu is not the extension action list.
+  Click-UiaElement -Element $extensionsMenuItem -Label "Chrome Extensions submenu"
+  Start-Sleep -Milliseconds 500
+  Save-UiaSnapshot -Stage "extensions-submenu-open" -BrowserPid $proc.Id
+
+  # Re-query the desktop after the submenu appears. Never reuse stale UIA handles.
+  $root = [System.Windows.Automation.AutomationElement]::RootElement
+  $all = $root.FindAll(
+    [System.Windows.Automation.TreeScope]::Descendants,
+    [System.Windows.Automation.Condition]::TrueCondition
+  )
+  $submenuExtensions = @()
+  foreach ($element in $all) {
+    try {
+      $name = [string]$element.Current.Name
+      $type = [string]$element.Current.ControlType.ProgrammaticName
+      $rect = $element.Current.BoundingRectangle
+      if ($type -eq "ControlType.MenuItem" -and $name -eq "Extensions" -and
+          $element.Current.IsEnabled -and -not $element.Current.IsOffscreen -and
+          $rect.Width -gt 0 -and $rect.Height -gt 0) {
+        $submenuExtensions += $element
+      }
+    } catch { Write-Host ("UIA submenu probe exception: " + $_.Exception.Message) }
+  }
+  # The submenu item is the left-most visible Extensions item; the main-menu
+  # launcher remains farther right. This is derived from the captured Chrome GUI,
+  # not a fixed screen coordinate.
+  $actionLauncher = $submenuExtensions |
+    Sort-Object { $_.Current.BoundingRectangle.Left } |
+    Select-Object -First 1
+  if (-not $actionLauncher) {
+    Save-UiaSnapshot -Stage "action-launcher-missing" -BrowserPid $proc.Id
+    throw "Chrome Extensions action-list launcher not found in Extensions submenu"
+  }
+  Click-UiaElement -Element $actionLauncher -Label "Chrome Extensions action-list launcher"
   Start-Sleep -Milliseconds 700
   Save-UiaSnapshot -Stage "extensions-open" -BrowserPid $proc.Id
 }
