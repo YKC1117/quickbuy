@@ -38,10 +38,13 @@ async function open(){
    await settings.screenshot({path:path.join(out,'unpacked-install.png'),fullPage:true});
    await settings.close();
  }
- worker=await until(()=>context.serviceWorkers().find(w=>w.url()===`chrome-extension://${id}/background.js`),20000);
- page=await context.newPage();await page.goto(`chrome-extension://${id}/sidepanel.html`);
+ page=await context.newPage();
+ await page.goto(`chrome-extension://${id}/sidepanel.html`);
  await page.locator('#simpleTargetUrl').waitFor();
  await until(async()=>(await msg('QBA_SELF_TEST_PING')).ok);
+ const backgroundContexts=await until(()=>page.evaluate(async()=>{try{const rows=await chrome.runtime.getContexts({contextTypes:['BACKGROUND']});return rows.length?rows:null}catch(_){return null}}),20000);
+ const playwrightWorker=context.serviceWorkers().find(w=>w.url()===`chrome-extension://${id}/background.js`);
+ worker=playwrightWorker||{url:()=>backgroundContexts[0]?.documentUrl||`chrome-extension://${id}/background.js`};
  cdp=await context.newCDPSession(page);cdp.on('ServiceWorker.workerErrorReported',e=>report.errors.push(JSON.stringify(e)));await cdp.send('ServiceWorker.enable');
  // Keep worker exceptions in the same report, including tasks after suspension.
  const versions=new Map();cdp.on('ServiceWorker.workerVersionUpdated',event=>{for(const v of event.versions)versions.set(v.versionId,v);});
