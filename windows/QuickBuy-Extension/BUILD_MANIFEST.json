@@ -1,0 +1,26 @@
+{
+  "app": "QuickBuy",
+  "version": "1.0.0",
+  "buildId": "2026-09-20.windows-runtime.1",
+  "release": "1.0",
+  "algorithm": "SHA-256",
+  "files": {
+    "background.js": "45943673040e895a8f8713970d0b1ab37ebbbb7deb9135b4679825ea46fb1336",
+    "content.js": "e1d56dad8ef77d2ff52cf91833cd6da945beff424cdc76d8366032a56652d492",
+    "icons/icon128.png": "89a94f2a35649d215e0ee5b713b3625473bc17d31be301f3619b720a8d84fe53",
+    "icons/icon16.png": "7a74e3c687521f61e5795dd9a8701a0aaf932745ebec85bd0bb87494c2e20bc4",
+    "icons/icon32.png": "8c41e1cd1a55882f1d7094c85ba721d8fff0e2a4019f74d104283be47d255856",
+    "icons/icon48.png": "04f43ca8bd02a648e0e54cfbedf82d01d0a8c2e7ba14b6db3cbfc29b2dff9c49",
+    "manifest.json": "f899056bff22366d8dd5529e431b5171b390cc627ee9d07b079bb5e7ff427c84",
+    "platform-catalog.js": "79cca3f09d05a1812a734045dcbdc24b6151574720841aa248ef7ec8b1c20365",
+    "profiles.js": "2c2fd05dd66a3b62de5d487be8ed7d763ec461bbb65514d310cafa850dfa1542",
+    "rules.js": "7eee5e5408a22bf33a1223c5852acdd32667c1bfdbab0f289dcc93a86a17b4c9",
+    "sidepanel.css": "7693f8545329e35768a2b646b31dab36123c53089b899587e3fc5812b75d289d",
+    "sidepanel.html": "9b2f19e757a4d40a8851feeb5ed36e65babc7363b37eba0703e9d112479d86fc",
+    "sidepanel.js": "6d28d165e7f779cc1d759e4b429bfcbf7523fad50b7c8222d08b156ddc966216",
+    "sync-core.js": "54d87c1ce16633913a1cc75871491ea761b929641c9ab8807d237fdd873b54f3",
+    "sync-crypto.js": "caebf1ecf66a192c39128573fe4433655b0283b046d5983ee4c2a22b638ea227",
+    "sync-provider.js": "f5e05a462d8fcb962cb876288ca2c48d772b0ccbd64c23a81f5c997a7afc4f4c",
+    "開始這裡_QuickBuy.html": "00a5cb81f8743e203045d99260c7f761ab1562a9b1ce6b713116d3c22efe8a40"
+  }
+}
