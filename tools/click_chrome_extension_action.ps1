@@ -58,9 +58,37 @@ foreach($b in $buttons){
   if($name){Write-Host ("Chrome button: "+$name+" / "+$b.Current.AutomationId)}
   if(!$extensionsButton -and $name -match '^Extensions$|Extensions menu|Manage extensions'){$extensionsButton=$b}
 }
-if(!$extensionsButton){throw 'Chrome Extensions toolbar button not found'}
-Click-UiaElement $extensionsButton 'Chrome Extensions toolbar'
-Start-Sleep -Milliseconds 500
+if($extensionsButton){
+  Click-UiaElement $extensionsButton 'Chrome Extensions toolbar'
+  Start-Sleep -Milliseconds 500
+}else{
+  Write-Host 'Chrome Extensions toolbar button not exposed; falling back to Main menu'
+  $mainMenu=$null
+  foreach($b in $buttons){if(([string]$b.Current.Name) -eq 'Main menu'){$mainMenu=$b;break}}
+  if(!$mainMenu){throw 'Chrome Main menu button not found'}
+  Click-UiaElement $mainMenu 'Chrome Main menu'
+  Start-Sleep -Milliseconds 400
+  $root=[System.Windows.Automation.AutomationElement]::RootElement
+  $menuEls=$root.FindAll([System.Windows.Automation.TreeScope]::Descendants,[System.Windows.Automation.Condition]::TrueCondition)
+  $extensionsMenu=$null
+  foreach($el in $menuEls){
+    $name=[string]$el.Current.Name
+    $ct=[string]$el.Current.ControlType.ProgrammaticName
+    if($name){Write-Host ("Chrome menu candidate: "+$ct+" | "+$name+" | "+$el.Current.AutomationId)}
+    if(!$extensionsMenu -and $name -match '^Extensions$|^Extensions and themes
+if(!$candidates.Count){throw "No visible $ExtensionName item found in Extensions menu"}
+$target=$candidates | Where-Object {$_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Button} | Select-Object -First 1
+if(!$target){$target=$candidates | Select-Object -First 1}
+Click-UiaElement $target $ExtensionName
+Write-Host ("Chrome extension action activated: "+$ExtensionName)
+){
+      $extensionsMenu=$el
+    }
+  }
+  if(!$extensionsMenu){throw 'Chrome Extensions menu item not found in Main menu'}
+  Click-UiaElement $extensionsMenu 'Chrome Extensions menu'
+  Start-Sleep -Milliseconds 500
+}
 
 $root=[System.Windows.Automation.AutomationElement]::RootElement
 $all=$root.FindAll([System.Windows.Automation.TreeScope]::Descendants,[System.Windows.Automation.Condition]::TrueCondition)
