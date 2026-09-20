@@ -19,7 +19,7 @@
   function nowIso() { return new Date().toISOString(); }
   function isPlain(v) { return !!v && typeof v === 'object' && !Array.isArray(v); }
   function isBlockedKey(k) { return BLOCKED_KEY_PATTERNS.some(rx => rx.test(String(k || ''))); }
-  const SENSITIVE_QUERY_KEY = /^(?:token|access[_-]?token|refresh[_-]?token|id[_-]?token|auth(?:orization)?(?:[_-]?token)?|session(?:[_-]?(?:id|key|token))?|sid|jwt|otp|password|passwd|cvv|cvc|api[_-]?key|apikey|secret|client[_-]?secret)$/i;
+  const SENSITIVE_QUERY_KEY = /^(?:token|access[_-]?token|refresh[_-]?token|id[_-]?token|auth(?:orization)?(?:[_-]?token)?|session(?:[_-]?(?:id|key|token))?|sid|jwt|otp|username|password|passwd|cvv|cvc|api[_-]?key|apikey|secret|client[_-]?secret)$/i;
   const TRACKING_QUERY_KEY = /^(?:utm_.+|fbclid|gclid|dclid|msclkid|igshid|share_channel_code)$/i;
   function sanitizeSyncUrl(raw) {
     try {
@@ -30,7 +30,10 @@
       for (const key of [...u.searchParams.keys()]) {
         if (SENSITIVE_QUERY_KEY.test(key) || TRACKING_QUERY_KEY.test(key)) u.searchParams.delete(key);
       }
-      if (/(?:^|[#&?])(token|access[_-]?token|refresh[_-]?token|id[_-]?token|auth(?:orization)?(?:[_-]?token)?|session(?:[_-]?(?:id|key|token))?|sid|jwt|otp|password|passwd|api[_-]?key|apikey|secret|client[_-]?secret)=/i.test(String(u.hash || ''))) u.hash = '';
+      let hash = String(u.hash || '');
+      try { hash = decodeURIComponent(hash); } catch (_) { u.hash = ''; }
+      if (/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/.test(hash)) u.hash = '';
+      if (/(?:^|[#&?])(token|access[_-]?token|refresh[_-]?token|id[_-]?token|auth(?:orization)?(?:[_-]?token)?|session(?:[_-]?(?:id|key|token))?|sid|jwt|otp|username|password|passwd|api[_-]?key|apikey|secret|client[_-]?secret)=/i.test(hash)) u.hash = '';
       u.username = ''; u.password = '';
       return u.toString();
     } catch (_) { return ''; }
