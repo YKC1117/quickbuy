@@ -182,7 +182,7 @@ async function detectPlatformFromInput({adopt=true}={}){
 $('detectPlatformBtn')?.addEventListener('click',()=>detectPlatformFromInput());
 $('platformUrl')?.addEventListener('change',()=>detectPlatformFromInput());
 $('platformUrl')?.addEventListener('input',()=>{clearTimeout(platformDetectTimer);platformDetectTimer=setTimeout(()=>detectPlatformFromInput(),220);});
-$('platformOpenTargetBtn')?.addEventListener('click',async e=>{const safe=cleanMobileTargetUrl(e.currentTarget?.dataset?.targetUrl||$('platformUrl')?.value||'');if(!safe){updatePlatformOpenTargetButton();return;}try{await navigateSafari(safe);mobileToast('已開啟目標網站','good',1000);}catch(err){mobileToast(humanMobileError(err,'無法開啟目標'),'error',2200);}});
+$('platformOpenTargetBtn')?.addEventListener('click',async e=>{const safe=cleanMobileTargetUrl(e.currentTarget?.dataset?.targetUrl||$('platformUrl')?.value||'');if(!safe){updatePlatformOpenTargetButton();return;}const preopened=preopenPwaTarget();try{await navigateSafari(safe,preopened);mobileToast('已開啟目標網站','good',1000);}catch(err){try{preopened?.close?.();}catch(_){}mobileToast(humanMobileError(err,'無法開啟目標'),'error',2200);}});
 
 // Quick platform launcher: shared Catalog, local recent preference, no transaction automation.
 const PLATFORM_PREFS_KEY='qbaSafariPlatformLauncherPrefsV1';
