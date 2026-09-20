@@ -103,15 +103,39 @@ foreach ($button in $buttons) {
 
 $launcher = $namedExtensions
 $launcherLabel = "Chrome Extensions toolbar"
+$usedRightToolbarMenu = $false
 if (-not $launcher) {
   $launcher = $rightToolbarCandidate
-  $launcherLabel = "Chrome right-toolbar candidate view_1007"
-  Write-Host "Named Extensions button not exposed; using view_1007 between profile and Main menu"
+  $launcherLabel = "Chrome right-toolbar main menu view_1007"
+  $usedRightToolbarMenu = $true
+  Write-Host "Named Extensions button not exposed; using Chrome right-toolbar menu view_1007"
 }
 if (-not $launcher) { throw "No Chrome extension launcher candidate found" }
 
 Click-UiaElement -Element $launcher -Label $launcherLabel
 Start-Sleep -Milliseconds 700
+
+if ($usedRightToolbarMenu) {
+  $root = [System.Windows.Automation.AutomationElement]::RootElement
+  $all = $root.FindAll(
+    [System.Windows.Automation.TreeScope]::Descendants,
+    [System.Windows.Automation.Condition]::TrueCondition
+  )
+  $extensionsMenuItem = $null
+  foreach ($element in $all) {
+    $name = [string]$element.Current.Name
+    $type = [string]$element.Current.ControlType.ProgrammaticName
+    if ($type -eq "ControlType.MenuItem" -and $name) {
+      Write-Host ("Chrome top menu item: " + $name + " / " + [string]$element.Current.AutomationId)
+    }
+    if (-not $extensionsMenuItem -and $element.Current.ControlType -eq [System.Windows.Automation.ControlType]::MenuItem -and $name -eq "Extensions") {
+      $extensionsMenuItem = $element
+    }
+  }
+  if (-not $extensionsMenuItem) { throw "Chrome Extensions item not found in right-toolbar menu" }
+  Click-UiaElement -Element $extensionsMenuItem -Label "Chrome Extensions menu item"
+  Start-Sleep -Milliseconds 700
+}
 
 $candidates = @(Get-VisibleQuickBuyCandidates -Name $ExtensionName)
 if ($candidates.Count -eq 0) {
