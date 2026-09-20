@@ -211,35 +211,52 @@ if ($usedRightToolbarMenu) {
   Save-UiaSnapshot -Stage "extensions-submenu-open" -BrowserPid $proc.Id
 
   # Re-query the desktop after the submenu appears. Never reuse stale UIA handles.
+  # Current official Chrome exposes only management/store commands in this
+  # submenu on the runner.  Do not mistake the still-visible parent Extensions
+  # item (ExpandCollapse) for an extension-action launcher.
   $root = [System.Windows.Automation.AutomationElement]::RootElement
   $all = $root.FindAll(
     [System.Windows.Automation.TreeScope]::Descendants,
     [System.Windows.Automation.Condition]::TrueCondition
   )
-  $submenuExtensions = @()
+  $submenuRows = @()
   foreach ($element in $all) {
     try {
       $name = [string]$element.Current.Name
       $type = [string]$element.Current.ControlType.ProgrammaticName
+      $class = [string]$element.Current.ClassName
       $rect = $element.Current.BoundingRectangle
-      if ($type -eq "ControlType.MenuItem" -and $name -eq "Extensions" -and
-          $element.Current.IsEnabled -and -not $element.Current.IsOffscreen -and
-          $rect.Width -gt 0 -and $rect.Height -gt 0) {
-        $submenuExtensions += $element
+      if ($type -eq "ControlType.MenuItem" -and $element.Current.IsEnabled -and
+          -not $element.Current.IsOffscreen -and $rect.Width -gt 0 -and $rect.Height -gt 0) {
+        $patterns = Get-PatternNames $element
+        if ($name -match "Extension|Chrome Web Store|QuickBuy") {
+          Write-Host ("Extensions submenu candidate: " + $name + " | " + $class + " | " + $patterns + " | " +
+            $rect.Left + "," + $rect.Top + "," + $rect.Width + "," + $rect.Height)
+        }
+        $submenuRows += [pscustomobject]@{ Element=$element; Name=$name; ClassName=$class; Patterns=$patterns; Left=$rect.Left }
       }
     } catch { Write-Host ("UIA submenu probe exception: " + $_.Exception.Message) }
   }
-  # The submenu item is the left-most visible Extensions item; the main-menu
-  # launcher remains farther right. This is derived from the captured Chrome GUI,
-  # not a fixed screen coordinate.
-  $actionLauncher = $submenuExtensions |
-    Sort-Object { $_.Current.BoundingRectangle.Left } |
+  $quickBuyMenu = $submenuRows |
+    Where-Object { $_.Name -match [regex]::Escape($ExtensionName) -and $_.Patterns -match "Invoke" } |
+    Select-Object -First 1
+  if ($quickBuyMenu) {
+    Click-UiaElement -Element $quickBuyMenu.Element -Label ($ExtensionName + " extension action")
+    Write-Host ("Chrome extension action activated from Extensions submenu: " + $ExtensionName)
+    exit 0
+  }
+  $actionLauncher = $submenuRows |
+    Where-Object {
+      $_.Name -eq "Extensions" -and $_.Patterns -match "Invoke" -and
+      $_.ClassName -eq "MenuItemView"
+    } |
+    Sort-Object Left |
     Select-Object -First 1
   if (-not $actionLauncher) {
     Save-UiaSnapshot -Stage "action-launcher-missing" -BrowserPid $proc.Id
-    throw "Chrome Extensions action-list launcher not found in Extensions submenu"
+    throw "Chrome Extensions submenu has no native extension-action launcher; only management/store commands are exposed"
   }
-  Click-UiaElement -Element $actionLauncher -Label "Chrome Extensions action-list launcher"
+  Click-UiaElement -Element $actionLauncher.Element -Label "Chrome Extensions action-list launcher"
   Start-Sleep -Milliseconds 700
   Save-UiaSnapshot -Stage "extensions-open" -BrowserPid $proc.Id
 }
