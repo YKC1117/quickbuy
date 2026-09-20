@@ -224,7 +224,28 @@ function normalizeShortcut(raw={}){const url=sanitizeShortcutUrl(raw.url);if(!ur
 async function loadCustomShortcuts(){try{const x=await api.storage.local.get(CUSTOM_SHORTCUTS_KEY);customShortcuts=(Array.isArray(x?.[CUSTOM_SHORTCUTS_KEY])?x[CUSTOM_SHORTCUTS_KEY]:[]).map(normalizeShortcut).filter(Boolean).slice(0,24);}catch(_){customShortcuts=[];}renderCustomShortcuts();}
 async function saveCustomShortcuts(){customShortcuts=customShortcuts.map(normalizeShortcut).filter(Boolean).slice(0,24);await api.storage.local.set({[CUSTOM_SHORTCUTS_KEY]:customShortcuts});renderCustomShortcuts();}
 function orderedCustomShortcuts(){const qv=customShortcutSearch.trim().toLowerCase();return[...customShortcuts].filter(x=>customShortcutFilter==='all'||x.category===customShortcutFilter).filter(x=>!qv||`${x.name} ${x.url} ${SHORTCUT_CATEGORY_LABELS[x.category]||''}`.toLowerCase().includes(qv)).sort((a,b)=>Number(b.pinned)-Number(a.pinned)||Number(b.lastUsedAt||0)-Number(a.lastUsedAt||0)||Number(b.updatedAt||0)-Number(a.updatedAt||0));}
-function renderCustomShortcuts(){const host=$('shortcutList');if(!host)return;$('shortcutFilters')?.querySelectorAll?.('button[data-shortcut-filter]').forEach(b=>b.classList.toggle('active',b.dataset.shortcutFilter===customShortcutFilter));const rows=orderedCustomShortcuts();if(!customShortcuts.length){host.innerHTML='<div class="shortcut-empty">尚未收藏網站。</div>';return;}if(!rows.length){host.innerHTML='<div class="shortcut-empty">沒有符合目前搜尋 / 分類的快捷網站。</div>';return;}host.innerHTML=rows.map(x=>{let display=x.url;try{const u=new URL(x.url);display=`${u.hostname}${u.pathname==='/'?'':u.pathname}`;}catch(_){}return `<div class="shortcut-card" data-shortcut-id="${x.id}"><button class="shortcut-open" data-action="open"><b>${x.name}</b><span class="shortcut-meta"><span class="shortcut-cat">${SHORTCUT_CATEGORY_LABELS[x.category]||'其他'}</span><span class="shortcut-url">${display}</span></span></button><button class="shortcut-tool" data-action="edit" aria-label="編輯">✎</button><button class="shortcut-tool${x.pinned?' pinned':''}" data-action="pin" aria-label="置頂">★</button><button class="shortcut-tool" data-action="delete" aria-label="刪除">×</button></div>`;}).join('');}
+function renderCustomShortcuts(){
+  const host=$('shortcutList');if(!host)return;
+  $('shortcutFilters')?.querySelectorAll?.('button[data-shortcut-filter]').forEach(b=>b.classList.toggle('active',b.dataset.shortcutFilter===customShortcutFilter));
+  const rows=orderedCustomShortcuts();
+  host.replaceChildren();
+  if(!customShortcuts.length){const e=document.createElement('div');e.className='shortcut-empty';e.textContent='尚未收藏網站。';host.append(e);return;}
+  if(!rows.length){const e=document.createElement('div');e.className='shortcut-empty';e.textContent='沒有符合目前搜尋 / 分類的快捷網站。';host.append(e);return;}
+  for(const x of rows){
+    let display=x.url;try{const u=new URL(x.url);display=`${u.hostname}${u.pathname==='/'?'':u.pathname}`;}catch(_){}
+    const card=document.createElement('div');card.className='shortcut-card';card.dataset.shortcutId=x.id;
+    const open=document.createElement('button');open.className='shortcut-open';open.dataset.action='open';
+    const name=document.createElement('b');name.textContent=x.name;
+    const meta=document.createElement('span');meta.className='shortcut-meta';
+    const cat=document.createElement('span');cat.className='shortcut-cat';cat.textContent=SHORTCUT_CATEGORY_LABELS[x.category]||'其他';
+    const url=document.createElement('span');url.className='shortcut-url';url.textContent=display;
+    meta.append(cat,url);open.append(name,meta);
+    const edit=document.createElement('button');edit.className='shortcut-tool';edit.dataset.action='edit';edit.setAttribute('aria-label','編輯');edit.textContent='✎';
+    const pin=document.createElement('button');pin.className='shortcut-tool'+(x.pinned?' pinned':'');pin.dataset.action='pin';pin.setAttribute('aria-label','置頂');pin.textContent='★';
+    const del=document.createElement('button');del.className='shortcut-tool';del.dataset.action='delete';del.setAttribute('aria-label','刪除');del.textContent='×';
+    card.append(open,edit,pin,del);host.append(card);
+  }
+}
 function showShortcutForm(prefill={}){editingShortcutId=String(prefill.id||'');$('shortcutForm').hidden=false;$('shortcutName').value=String(prefill.name||'').slice(0,40);$('shortcutUrl').value=String(prefill.url||'');$('shortcutCategory').value=prefill.category?normalizeShortcutCategory(prefill.category):'';}
 function hideShortcutForm(){editingShortcutId='';$('shortcutForm').hidden=true;}
 async function upsertShortcut({id='',name,url,title='',category=''}={}){const safe=sanitizeShortcutUrl(url);if(!safe)throw new Error('請輸入有效的 http / https 網址。');const cat=category?normalizeShortcutCategory(category):inferShortcutCategory(safe,name||title);const byId=id?customShortcuts.find(x=>x.id===id):null;const existing=byId||customShortcuts.find(x=>x.url===safe);if(existing){const dup=customShortcuts.find(x=>x.id!==existing.id&&x.url===safe);if(dup)throw new Error('這個網址已經收藏過。');existing.url=safe;existing.name=shortcutNameFallback(safe,name||title||existing.name);existing.category=cat;existing.updatedAt=Date.now();if(!byId)existing.lastUsedAt=Date.now();}else{if(customShortcuts.length>=24)throw new Error('快捷網站最多 24 個。');customShortcuts.push(normalizeShortcut({name:name||title,url:safe,category:cat,lastUsedAt:Date.now(),updatedAt:Date.now()}));}await saveCustomShortcuts();}
@@ -305,8 +326,17 @@ async function rememberMobileTarget(url,platformId=''){
 }
 function renderMobileRecentTargets(){
   const host=$('mobileRecentTargets');if(!host)return;
-  if(!mobileRecentTargets.length){host.innerHTML='<div class="target-history-empty">還沒有最近目標</div>';return;}
-  host.innerHTML=mobileRecentTargets.map(x=>`<div class="target-history-row" data-recent-target-id="${x.id}"><button class="target-history-open" data-action="open"><b>${x.label}</b><small>${x.url}</small></button><button class="target-history-del" data-action="delete" aria-label="刪除">×</button></div>`).join('');
+  host.replaceChildren();
+  if(!mobileRecentTargets.length){const e=document.createElement('div');e.className='target-history-empty';e.textContent='還沒有最近目標';host.append(e);return;}
+  for(const x of mobileRecentTargets){
+    const row=document.createElement('div');row.className='target-history-row';row.dataset.recentTargetId=x.id;
+    const open=document.createElement('button');open.className='target-history-open';open.dataset.action='open';
+    const label=document.createElement('b');label.textContent=x.label;
+    const url=document.createElement('small');url.textContent=x.url;
+    open.append(label,url);
+    const del=document.createElement('button');del.className='target-history-del';del.dataset.action='delete';del.setAttribute('aria-label','刪除');del.textContent='×';
+    row.append(open,del);host.append(row);
+  }
 }
 async function clearMobileTarget({keepPrep=true}={}){
   mobilePrep.platformId='';
