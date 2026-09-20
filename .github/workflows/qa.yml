@@ -28,7 +28,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for f in index.html manifest.webmanifest pwa-adapter.js platform-catalog.js sync-core.js sync-crypto.js sync-provider.js dashboard.js pwa-boot.js icons/icon192.png icons/icon512.png; do
+          for f in index.html tutorial.html manifest.webmanifest pwa-adapter.js platform-catalog.js sync-core.js sync-crypto.js sync-provider.js dashboard.js pwa-boot.js icons/icon192.png icons/icon512.png tutorial/01-first-open.png tutorial/02-home.png tutorial/03-platform.png tutorial/03-url.png tutorial/04-prep.png tutorial/05-more.png; do
             test -f "docs/$f" || { echo "Missing docs/$f"; exit 1; }
             grep -q "$f" docs/sw.js || { echo "Service worker missing $f"; exit 1; }
           done
