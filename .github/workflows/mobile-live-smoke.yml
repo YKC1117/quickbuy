@@ -349,6 +349,21 @@ jobs:
             await page.waitForTimeout(200);
             const afterDelete=await page.locator('#mobileRecentTargets [data-recent-target-id]').count();
             if(afterDelete!==beforeDelete-1) throw new Error(label+': recent target delete failed');
+            if(afterDelete<1) throw new Error(label+': expected more than one recent target before clear-all');
+            if(!(await page.locator('#mobileClearRecentTargetsBtn').isVisible())) throw new Error(label+': clear-all recent targets button missing');
+            const targetBeforeClearAll=await page.evaluate(async()=>{
+              const r=await globalThis.QBA_PWA_API.storage.local.get('qbaMobilePrepV1');
+              return r?.qbaMobilePrepV1||null;
+            });
+            await page.locator('#mobileClearRecentTargetsBtn').click();
+            await page.waitForTimeout(200);
+            if(await page.locator('#mobileRecentTargets [data-recent-target-id]').count()!==0) throw new Error(label+': clear-all recent targets failed');
+            if(await page.locator('#mobileClearRecentTargetsBtn').isVisible()) throw new Error(label+': clear-all recent targets button still visible after clear');
+            const targetAfterClearAll=await page.evaluate(async()=>{
+              const r=await globalThis.QBA_PWA_API.storage.local.get('qbaMobilePrepV1');
+              return r?.qbaMobilePrepV1||null;
+            });
+            if(targetAfterClearAll?.targetUrl!==targetBeforeClearAll?.targetUrl || targetAfterClearAll?.quantity!==targetBeforeClearAll?.quantity || targetAfterClearAll?.keyword!==targetBeforeClearAll?.keyword) throw new Error(label+': clearing recent targets changed current prep');
 
             // Clear target keeps quantity and keyword.
             await page.locator('#mobileClearTargetBtn').click();
@@ -380,6 +395,7 @@ jobs:
           console.log('clipboard shortcut prefill PASS');
           console.log('user-controlled renderer XSS regression PASS');
           console.log('fast target controls PASS');
+          console.log('clear-all recent targets PASS');
           console.log('PWA pre-open navigation PASS');
           console.log('platform select + persistence PASS');
           console.log('tab navigation PASS');
