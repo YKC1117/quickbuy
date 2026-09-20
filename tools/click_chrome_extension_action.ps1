@@ -54,7 +54,7 @@ $buttons=$window.FindAll(
 )
 $extensionsButton=$null
 foreach($b in $buttons){
-  $name=String($b.Current.Name)
+  $name=[string]$b.Current.Name
   if($name){Write-Host ("Chrome button: "+$name+" / "+$b.Current.AutomationId)}
   if(!$extensionsButton -and $name -match '^Extensions$|Extensions menu|Manage extensions'){$extensionsButton=$b}
 }
@@ -66,9 +66,9 @@ $root=[System.Windows.Automation.AutomationElement]::RootElement
 $all=$root.FindAll([System.Windows.Automation.TreeScope]::Descendants,[System.Windows.Automation.Condition]::TrueCondition)
 $candidates=@()
 foreach($el in $all){
-  $name=String($el.Current.Name)
+  $name=[string]$el.Current.Name
   if($name -and $name -match [regex]::Escape($ExtensionName)){
-    $ct=String($el.Current.ControlType.ProgrammaticName)
+    $ct=[string]$el.Current.ControlType.ProgrammaticName
     Write-Host ("QuickBuy candidate: "+$ct+" | "+$name+" | "+$el.Current.AutomationId)
     if($el.Current.IsEnabled -and $el.Current.BoundingRectangle.Width -gt 0 -and $el.Current.BoundingRectangle.Height -gt 0){
       $candidates+=,$el
