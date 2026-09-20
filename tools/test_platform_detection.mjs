@@ -56,3 +56,11 @@ if(hashSensitive!=='https://example.com/item?id=9'){
 
 console.log('URL_SANITIZE_PASS');
 console.log(JSON.stringify({functionalQueryPreserved:true,sensitiveParamsRemoved:true,trackingParamsRemoved:true}));
+
+
+const expandedSensitive=c.sanitizeTargetUrl('https://example.com/item?i_code=123&eventId=456&seat=A&accessToken=one&session_id=two&auth_token=three&client_secret=four');
+if(expandedSensitive!=='https://example.com/item?i_code=123&eventId=456&seat=A'){
+  throw new Error('expanded sensitive query stripping failed: '+expandedSensitive);
+}
+console.log('EXPANDED_SENSITIVE_URL_PASS');
+console.log(JSON.stringify({expandedSensitive:true,functionalParamsStillPreserved:true}));
