@@ -430,12 +430,27 @@ window.addEventListener('focus',()=>handleMobileForeground('focus'));
 window.addEventListener('pageshow',()=>handleMobileForeground('pageshow'));
 
 // High-frequency mobile controls.
-$('mobileSwapTargetBtn')?.addEventListener('click',()=>{
+$('mobileSwapTargetBtn')?.addEventListener('click',async()=>{
+  const hadTarget=Boolean(mobilePrep.targetUrl);
   showMobileView('platforms');
   const input=$('platformUrl');
   if(input){input.value='';input.focus();input.scrollIntoView({block:'center',behavior:'smooth'});}
   updatePlatformOpenTargetButton();
-  if($('platformStatus'))$('platformStatus').textContent='貼上新網址，QuickBuy 會自動辨識並取代目前目標。';
+  if(hadTarget){
+    if($('platformStatus'))$('platformStatus').textContent='貼上新網址，QuickBuy 會自動辨識並取代目前目標。';
+    return;
+  }
+  try{
+    const text=await navigator.clipboard?.readText?.();
+    const normalized=globalThis.QBA_PLATFORM_CATALOG?.normalizeUrlInput?.(text||'')||'';
+    if(!normalized)throw new Error('clipboard-no-url');
+    if(input)input.value=text;
+    await detectPlatformFromInput();
+    mobileToast('已從剪貼簿讀取網址','good',1400);
+  }catch(_){
+    if(input)input.focus();
+    if($('platformStatus'))$('platformStatus').textContent='請貼上商品、售票或商城網址；QuickBuy 會自動辨識。';
+  }
 });
 $('mobileClearTargetBtn')?.addEventListener('click',async()=>{
   await clearMobileTarget({keepPrep:true});
