@@ -123,6 +123,17 @@ async function attachNativePanel(target){
  fs.writeFileSync(path.join(out,`sidepanel-context-${openNativePanel.count}.json`),JSON.stringify({target,...proof},null,2));
  return panel;
 }
+async function auditChromeErrors(stage){
+ if(browserName!=='chrome')return;
+ let manager=context.pages().find(p=>p.url()==='chrome://extensions/');
+ if(!manager){manager=await context.newPage();await manager.goto('chrome://extensions/');}
+ const item=manager.locator(`extensions-item[id="${id}"]`);await item.waitFor({state:'attached'});
+ const evidence=await item.evaluate(e=>({id:e.data?.id,state:e.data?.state,runtimeErrors:e.data?.runtimeErrors,manifestErrors:e.data?.manifestErrors}));
+ fs.writeFileSync(path.join(out,`chrome-manager-errors-${stage}.json`),JSON.stringify(evidence,null,2));
+ console.log('Chrome extension manager errors: '+JSON.stringify(evidence));
+ assert.deepEqual(evidence.runtimeErrors||[],[],'Chrome manager has persisted runtime errors');
+ assert.deepEqual(evidence.manifestErrors||[],[],'Chrome manager has manifest errors');
+}
 async function captureNativeEvidence(stage){
  if(browserName!=='chrome')return;
  await new Promise((resolve,reject)=>{
@@ -231,6 +242,7 @@ async function waitLaunched(mission){return until(async()=>{const r=await local(
    assert.ok(panels.some(c=>c.documentUrl===`chrome-extension://${id}/sidepanel.html`));
    pass('Native Chrome toolbar click opens SIDE_PANEL',panels);
    await captureNativeEvidence('sidepanel-interactive');
+   await auditChromeErrors('initial');
  }else if(browserName!=='chromium'){
    await page.evaluate(async()=>{const w=await chrome.windows.getCurrent();const b=document.createElement('button');b.id='runtimeOpenSidePanel';b.textContent='Open native Side Panel';b.onclick=()=>chrome.sidePanel.open({windowId:w.id});document.body.prepend(b);});
    await page.locator('#runtimeOpenSidePanel').click();
@@ -375,5 +387,5 @@ async function waitLaunched(mission){return until(async()=>{const r=await local(
  for(let i=0;i<10;i++){await arm(url,60,60000);await Promise.all([msg('QBA_RUN_MAINTENANCE'),msg('QBA_DISARM_MISSION')]);assert.equal(await local('qbaArmedMission'),undefined);assert.equal(await page.evaluate(()=>chrome.alarms.get('qbaScheduledMission')),undefined);}pass('Maintenance/cancel race regression');
  const integrity=await page.evaluate(()=>verifyBuildManifest());assert.ok(integrity.ok,JSON.stringify(integrity.mismatches));pass('Loaded source build hashes verified');
  await page.screenshot({path:path.join(out,'final.png'),fullPage:true});
- assert.deepEqual(report.errors,[]);pass('No captured console or page runtime errors');await captureNativeEvidence('final');report.result='PASS';
+ assert.deepEqual(report.errors,[]);pass('No captured console or page runtime errors');await auditChromeErrors('final');await captureNativeEvidence('final');report.result='PASS';
  }catch(error){await captureNativeEvidence('failure').catch(e=>console.error(e));if(page)await page.screenshot({path:path.join(out,'failure.png'),fullPage:true}).catch(()=>{});report.result='FAIL';report.failure=error.stack;console.error(error);process.exitCode=1;}finally{saveChromeState('finished');if(context)await context.close().catch(()=>{});saveChromeState('closed');fs.writeFileSync(path.join(out,'report.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));fs.rmSync(profile,{recursive:true,force:true,maxRetries:3});}})();
