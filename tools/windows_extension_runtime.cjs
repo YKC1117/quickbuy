@@ -101,13 +101,13 @@ async function attachNativePanel(target){
  };
  panel.locator=(selector,index=null)=>{
   const evaluate=(fn,arg)=>panel.evaluate(new Function('arg',`return (${fn.toString()})(document.querySelectorAll(${JSON.stringify(selector)})[${index??0}],arg)`),arg);
-  const visible=()=>evaluate(e=>!!e&&!!(e.offsetWidth||e.offsetHeight||e.getClientRects().length)&&getComputedStyle(e).visibility!=='hidden');
+  const visible=()=>evaluate(e=>!!e&&e.checkVisibility({checkVisibilityCSS:true,checkOpacity:true}));
   const loc={first:()=>panel.locator(selector,0),evaluate,
    evaluateAll:fn=>panel.evaluate(new Function(`return (${fn.toString()})([...document.querySelectorAll(${JSON.stringify(selector)})])`)),
    count:()=>panel.evaluate(s=>document.querySelectorAll(s).length,selector),isVisible:visible,
    waitFor:()=>until(visible),getAttribute:name=>evaluate((e,n)=>e.getAttribute(n),name),
    inputValue:()=>evaluate(e=>e.value),innerText:()=>evaluate(e=>e.innerText),
-   click:async()=>{await until(visible);const r=await evaluate(e=>{e.scrollIntoView({block:'center'});const r=e.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};});
+   click:async()=>{await until(visible);const r=await evaluate(e=>{e.scrollIntoView({block:'center'});const r=e.getBoundingClientRect();const x=r.x+r.width/2,y=r.y+r.height/2;const hit=document.elementFromPoint(x,y);if(!hit||!(e===hit||e.contains(hit)))throw Error('Control is obscured: '+e.id);return {x,y};});
     await client.send('Input.dispatchMouseEvent',{type:'mousePressed',...r,button:'left',clickCount:1});await client.send('Input.dispatchMouseEvent',{type:'mouseReleased',...r,button:'left',clickCount:1});},
    fill:async value=>{await loc.click();const type=await evaluate(e=>e.type);
     if(['date','time'].includes(type)){await evaluate((e,v)=>{e.value=v;e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));},value);return;}
@@ -149,6 +149,8 @@ async function restorePanel(){
  if(browserName==='chrome'){const host=context.pages().find(p=>!p.url().startsWith('chrome-extension://'))||await context.newPage();await openNativePanel(host);}
  else{page=await context.newPage();await page.goto(`chrome-extension://${id}/sidepanel.html`);}
  await page.locator('#simpleTargetUrl').waitFor();
+ cdp=page.cdp||await context.newCDPSession(page);
+ cdp.on('ServiceWorker.workerErrorReported',e=>report.errors.push(JSON.stringify(e)));await cdp.send('ServiceWorker.enable');
 }
 async function open(){
  context=await chromium.launchPersistentContext(profile,{channel:browserName,headless:browserName==='chromium',ignoreDefaultArgs:['--disable-extensions'],args:browserName==='chrome'?['--enable-unsafe-extension-debugging']:[`--disable-extensions-except=${ext}`,`--load-extension=${ext}`,'--enable-unsafe-extension-debugging'],viewport:{width:520,height:1000}});
@@ -235,6 +237,7 @@ async function waitLaunched(mission){return until(async()=>{const r=await local(
  // Actual platform buttons must open their catalog destination in a real tab.
  // Fixture only the network response; preserve real UI click, chrome.tabs and URL.
  for(const group of ['simpleTicketPlatformQuickPick','simpleShoppingPlatformQuickPick']){
+   if(!await page.locator(`details:has(#${group})`).evaluate(e=>e.open))await page.locator(`details:has(#${group}) summary`).click();
    const button=page.locator(`#${group} button`).first();
    const platformId=await button.getAttribute('data-platform-id');
    const platform=await page.evaluate(id=>QBA_PLATFORM_CATALOG.list().find(p=>p.id===id),platformId);
@@ -322,13 +325,14 @@ async function waitLaunched(mission){return until(async()=>{const r=await local(
  pass('Real alarm alone wakes stopped worker',{stoppedAt,scheduledTime:waking.startAt,observedAt});
  await observer.detach();await observerPage.close();
 
- r=await arm('https://example.com/old-build',60,2500);
- await page.evaluate(async()=>{const {qbaArmedMission:m}=await chrome.storage.local.get('qbaArmedMission');m.buildId='obsolete-runtime-test';await chrome.storage.local.set({qbaArmedMission:m});});
- await page.waitForTimeout(4000);
+ r=await arm('https://example.com/old-build',60,4000);const staleMission=r.mission;
+ await page.evaluate(async()=>{const {qbaArmedMission:m}=await chrome.storage.local.get('qbaArmedMission');globalThis.staleRemovalAt=0;chrome.storage.onChanged.addListener((changes,area)=>{if(area==='local'&&changes.qbaArmedMission?.oldValue?.id===m.id&&!changes.qbaArmedMission.newValue)globalThis.staleRemovalAt=Date.now();});m.buildId='obsolete-runtime-test';await chrome.storage.local.set({qbaArmedMission:m});});
+ await page.waitForTimeout(5500);
+ const staleRemovalAt=await page.evaluate(()=>globalThis.staleRemovalAt);assert.ok(staleRemovalAt>=staleMission.startAt,'Old task must be cleared by its due alarm, not an earlier poll');
  assert.equal(await local('qbaArmedMission'),undefined);
  assert.equal(await page.evaluate(()=>chrome.alarms.get('qbaScheduledMission')),undefined);
  assert.ok(!(await page.evaluate(()=>chrome.tabs.query({}))).some(t=>(t.pendingUrl||t.url).includes('/old-build')));
- pass('Old build ID real alarm fails closed and clears task/alarm');
+ pass('Old build ID real alarm fails closed and clears task/alarm',{scheduledTime:staleMission.startAt,staleRemovalAt});
 
  const a=await arm('https://example.com/replaced-A',60,3000);
  const b=await arm('https://example.com/replacement-B',60,7500);
