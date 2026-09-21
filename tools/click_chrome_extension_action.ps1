@@ -1,5 +1,6 @@
 param(
   [string]$ExtensionName = "QuickBuy",
+  [string]$ActionTitle = "",
   [string]$ProcessName = "chrome",
   [string]$ArtifactDir = ""
 )
@@ -63,6 +64,9 @@ function Save-UiaSnapshot {
         ControlType=$type; Name=[string]$e.Current.Name; AutomationId=[string]$e.Current.AutomationId;
         ClassName=[string]$e.Current.ClassName; ProcessId=$elementPid; IsEnabled=[bool]$e.Current.IsEnabled;
         IsOffscreen=[bool]$e.Current.IsOffscreen; BoundingRectangle=("$($rect.Left),$($rect.Top),$($rect.Width),$($rect.Height)");
+        NativeWindowHandle=$e.Current.NativeWindowHandle;
+        RuntimeId=($e.GetRuntimeId() -join '.');
+        ParentName=([System.Windows.Automation.TreeWalker]::ControlViewWalker.GetParent($e)).Current.Name;
         Patterns=(Get-PatternNames $e)
       }
     } catch {}
@@ -137,148 +141,70 @@ Start-Sleep -Milliseconds 700
 Write-Host ("Chrome PID: " + $proc.Id + " / HWND: " + $proc.MainWindowHandle)
 Save-UiaSnapshot -Stage "before-menu" -BrowserPid $proc.Id
 
-$window = [System.Windows.Automation.AutomationElement]::FromHandle($hwnd)
-$buttonCondition = New-Object System.Windows.Automation.PropertyCondition(
-  [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
-  [System.Windows.Automation.ControlType]::Button
-)
-$buttons = $window.FindAll([System.Windows.Automation.TreeScope]::Descendants,$buttonCondition)
 
-$namedExtensions = $null
-$rightToolbarCandidate = $null
-foreach ($button in $buttons) {
-  $name = [string]$button.Current.Name
-  $automationId = [string]$button.Current.AutomationId
-  $rect = $button.Current.BoundingRectangle
-  if ($name) {
-    Write-Host ("Chrome button: " + $name + " / " + $automationId + " / " + $rect.Left + "," + $rect.Top + "," + $rect.Width + "," + $rect.Height)
-  }
-  if (-not $namedExtensions -and $name -match "^(Extensions|Extensions menu|Manage extensions)$") {
-    $namedExtensions = $button
-  }
-  if (-not $rightToolbarCandidate -and $automationId -eq "view_1007") {
-    $rightToolbarCandidate = $button
-  }
-  if (-not $directQuickBuyButton -and $name -match [regex]::Escape($ExtensionName)) {
-    $directQuickBuyButton = $button
-  }
-}
-
-if ($directQuickBuyButton) {
-  Click-UiaElement -Element $directQuickBuyButton -Label ($ExtensionName + " pinned action")
-  Write-Host ("Chrome extension action activated directly from toolbar: " + $ExtensionName)
-  exit 0
-}
-
-$launcher = $namedExtensions
-$launcherLabel = "Chrome Extensions toolbar"
-$usedRightToolbarMenu = $false
-if (-not $launcher) {
-  $launcher = $rightToolbarCandidate
-  $launcherLabel = "Chrome right-toolbar main menu view_1007"
-  $usedRightToolbarMenu = $true
-  Write-Host "Named Extensions button not exposed; using Chrome right-toolbar menu view_1007"
-}
-if (-not $launcher) { throw "No Chrome extension launcher candidate found" }
-
-Click-UiaElement -Element $launcher -Label $launcherLabel
-Start-Sleep -Milliseconds 700
-Save-UiaSnapshot -Stage "launcher-open" -BrowserPid $proc.Id
-
-if ($usedRightToolbarMenu) {
-  $root = [System.Windows.Automation.AutomationElement]::RootElement
-  $all = $root.FindAll(
-    [System.Windows.Automation.TreeScope]::Descendants,
-    [System.Windows.Automation.Condition]::TrueCondition
-  )
-  $extensionsMenuItem = $null
-  foreach ($element in $all) {
-    $name = [string]$element.Current.Name
-    $type = [string]$element.Current.ControlType.ProgrammaticName
-    if ($type -eq "ControlType.MenuItem" -and $name) {
-      Write-Host ("Chrome top menu item: " + $name + " / " + [string]$element.Current.AutomationId)
-    }
-    if (-not $extensionsMenuItem -and $element.Current.ControlType -eq [System.Windows.Automation.ControlType]::MenuItem -and $name -eq "Extensions") {
-      $extensionsMenuItem = $element
-    }
-  }
-  if (-not $extensionsMenuItem) { throw "Chrome Extensions item not found in right-toolbar menu" }
-  # The first "Extensions" entry in Chrome's main menu is a submenu launcher.
-  # Run 35512554527 proves its child menu contains Manage Extensions / Extensions /
-  # Visit Chrome Web Store.  Opening that submenu is not the extension action list.
-  Click-UiaElement -Element $extensionsMenuItem -Label "Chrome Extensions submenu"
-  Start-Sleep -Milliseconds 500
-  Save-UiaSnapshot -Stage "extensions-submenu-open" -BrowserPid $proc.Id
-
-  # Re-query the desktop after the submenu appears. Never reuse stale UIA handles.
-  # Current official Chrome exposes only management/store commands in this
-  # submenu on the runner.  Do not mistake the still-visible parent Extensions
-  # item (ExpandCollapse) for an extension-action launcher.
-  $root = [System.Windows.Automation.AutomationElement]::RootElement
-  $all = $root.FindAll(
-    [System.Windows.Automation.TreeScope]::Descendants,
-    [System.Windows.Automation.Condition]::TrueCondition
-  )
-  $submenuRows = @()
-  foreach ($element in $all) {
+function Get-ToolbarButtons {
+  $window=[System.Windows.Automation.AutomationElement]::FromHandle($hwnd)
+  $all=$window.FindAll([System.Windows.Automation.TreeScope]::Descendants,[System.Windows.Automation.Condition]::TrueCondition)
+  foreach($e in $all){
     try {
-      $name = [string]$element.Current.Name
-      $type = [string]$element.Current.ControlType.ProgrammaticName
-      $class = [string]$element.Current.ClassName
-      $rect = $element.Current.BoundingRectangle
-      if ($type -eq "ControlType.MenuItem" -and $element.Current.IsEnabled -and
-          -not $element.Current.IsOffscreen -and $rect.Width -gt 0 -and $rect.Height -gt 0) {
-        $patterns = Get-PatternNames $element
-        if ($name -match "Extension|Chrome Web Store|QuickBuy") {
-          Write-Host ("Extensions submenu candidate: " + $name + " | " + $class + " | " + $patterns + " | " +
-            $rect.Left + "," + $rect.Top + "," + $rect.Width + "," + $rect.Height)
-        }
-        $submenuRows += [pscustomobject]@{ Element=$element; Name=$name; ClassName=$class; Patterns=$patterns; Left=$rect.Left }
+      if($e.Current.ControlType -ne [System.Windows.Automation.ControlType]::Button -or $e.Current.IsOffscreen -or -not $e.Current.IsEnabled){continue}
+      $parent=[System.Windows.Automation.TreeWalker]::ControlViewWalker.GetParent($e)
+      $inToolbar=$false
+      while($parent -and $parent -ne $window){
+        if($parent.Current.ControlType -eq [System.Windows.Automation.ControlType]::Document){break}
+        if($parent.Current.ControlType -eq [System.Windows.Automation.ControlType]::ToolBar){$inToolbar=$true;break}
+        $parent=[System.Windows.Automation.TreeWalker]::ControlViewWalker.GetParent($parent)
       }
-    } catch { Write-Host ("UIA submenu probe exception: " + $_.Exception.Message) }
+      if($inToolbar){Write-Output $e}
+    } catch {}
   }
-  $quickBuyMenu = $submenuRows |
-    Where-Object { $_.Name -match [regex]::Escape($ExtensionName) -and $_.Patterns -match "Invoke" } |
-    Select-Object -First 1
-  if ($quickBuyMenu) {
-    Click-UiaElement -Element $quickBuyMenu.Element -Label ($ExtensionName + " extension action")
-    Write-Host ("Chrome extension action activated from Extensions submenu: " + $ExtensionName)
-    exit 0
-  }
-  $actionLauncher = $submenuRows |
-    Where-Object {
-      $_.Name -eq "Extensions" -and $_.Patterns -match "Invoke" -and
-      $_.ClassName -eq "MenuItemView"
-    } |
-    Sort-Object Left |
-    Select-Object -First 1
-  if (-not $actionLauncher) {
-    Save-UiaSnapshot -Stage "action-launcher-missing" -BrowserPid $proc.Id
-    throw "Chrome Extensions submenu has no native extension-action launcher; only management/store commands are exposed"
-  }
-  Click-UiaElement -Element $actionLauncher.Element -Label "Chrome Extensions action-list launcher"
-  Start-Sleep -Milliseconds 700
-  Save-UiaSnapshot -Stage "extensions-open" -BrowserPid $proc.Id
 }
-
-$candidates = @(Get-VisibleQuickBuyCandidates -Name $ExtensionName)
-if ($candidates.Count -eq 0) {
-  $root = [System.Windows.Automation.AutomationElement]::RootElement
-  $all = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants,[System.Windows.Automation.Condition]::TrueCondition)
-  foreach ($element in $all) {
-    $label = [string]$element.Current.Name
-    if ($label -and $label -match "extension|side panel|pin|manage") {
-      Write-Host ("Post-launch UI: " + [string]$element.Current.ControlType.ProgrammaticName + " | " + $label + " | " + [string]$element.Current.AutomationId)
+function Get-Action {
+  foreach($e in @(Get-ToolbarButtons)){
+    if($e.Current.Name -match [regex]::Escape($ExtensionName) -or ($ActionTitle -and $e.Current.Name -eq $ActionTitle)){return $e}
+  }
+}
+$target=$null
+$deadline=(Get-Date).AddSeconds(10)
+while((Get-Date) -lt $deadline -and -not $target){
+  $target=Get-Action
+  if($target){break}
+  $launcher=@(Get-ToolbarButtons | Where-Object { $_.Current.Name -match '^(Extensions|Extensions menu)$' }) | Select-Object -First 1
+  if($launcher){break}
+  Start-Sleep -Milliseconds 250
+}
+if(-not $target){
+  if(-not $launcher){Save-UiaSnapshot -Stage 'toolbar-launcher-missing' -BrowserPid $proc.Id;throw 'Extensions Toolbar launcher not found; no main-menu fallback allowed'}
+  Click-UiaElement -Element $launcher -Label 'Extensions Toolbar launcher'
+  Start-Sleep -Milliseconds 500
+  Save-UiaSnapshot -Stage 'toolbar-launcher-open' -BrowserPid $proc.Id
+  # Pin only the control in the row that identifies QuickBuy, never a generic first Pin.
+  $all=[System.Windows.Automation.AutomationElement]::RootElement.FindAll([System.Windows.Automation.TreeScope]::Descendants,[System.Windows.Automation.Condition]::TrueCondition)
+  $pin=$null
+  foreach($e in $all){
+    if($e.Current.IsOffscreen -or $e.Current.Name -notmatch [regex]::Escape($ExtensionName)){continue}
+    $parent=[System.Windows.Automation.TreeWalker]::ControlViewWalker.GetParent($e)
+    for($level=0;$level -lt 3 -and $parent;$level++){
+      $children=$parent.FindAll([System.Windows.Automation.TreeScope]::Descendants,[System.Windows.Automation.Condition]::TrueCondition)
+      $pins=@($children | Where-Object { -not $_.Current.IsOffscreen -and $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Button -and $_.Current.Name -match '^Pin( |$)' })
+      if($pins.Count -eq 1){$pin=$pins[0];break}
+      $parent=[System.Windows.Automation.TreeWalker]::ControlViewWalker.GetParent($parent)
     }
+    if($pin){break}
   }
-  Save-UiaSnapshot -Stage "action-missing" -BrowserPid $proc.Id
-  throw "QuickBuy action did not appear after opening Chrome extension launcher"
+  if(-not $pin){Save-UiaSnapshot -Stage 'pin-missing' -BrowserPid $proc.Id;throw 'QuickBuy row Pin control not uniquely identifiable'}
+  Click-UiaElement -Element $pin -Label 'Pin QuickBuy action'
+  Start-Sleep -Milliseconds 300
+  Save-UiaSnapshot -Stage 'pinned-menu' -BrowserPid $proc.Id
+  [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
+  Start-Sleep -Milliseconds 300
+  $target=Get-Action
 }
-
-$target = $candidates |
-  Where-Object { $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Button } |
-  Select-Object -First 1
-if (-not $target) { $target = $candidates | Select-Object -First 1 }
-
-Click-UiaElement -Element $target -Label $ExtensionName
-Write-Host ("Chrome extension action activated: " + $ExtensionName)
+if(-not $target){Save-UiaSnapshot -Stage 'action-missing' -BrowserPid $proc.Id;throw 'QuickBuy action not present in real Toolbar after pin'}
+Save-UiaSnapshot -Stage 'toolbar-action-ready' -BrowserPid $proc.Id
+# Reacquire after diagnostics: never click a stale menu node.
+$target=Get-Action
+Click-UiaElement -Element $target -Label 'QuickBuy Toolbar action'
+Start-Sleep -Milliseconds 700
+Save-UiaSnapshot -Stage 'sidepanel-open' -BrowserPid $proc.Id
+Write-Host 'Chrome QuickBuy native Toolbar action clicked'

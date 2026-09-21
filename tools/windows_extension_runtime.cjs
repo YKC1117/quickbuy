@@ -18,6 +18,17 @@ if(browserName==='chrome'){
  console.log('Seeded Chrome test profile to pin QuickBuy action: '+expectedId);
 }
 let context,page,worker,cdp;
+function saveChromeState(stage){
+ if(browserName!=='chrome')return;
+ const state={stage,extensionId:id};
+ for(const name of ['Preferences','Secure Preferences']){
+  try{const j=JSON.parse(fs.readFileSync(path.join(profile,'Default',name),'utf8'));const e=j.extensions||{},m=e.settings?.[id];
+   state[name]={pinned_extensions:e.pinned_extensions,pinned_by_default:e.pinned_by_default,quickbuy:m?{state:m.state,disable_reasons:m.disable_reasons,location:m.location,path:m.path,was_installed_by_default:m.was_installed_by_default,toolbar_pin:m.toolbar_pin}:null};
+  }catch(e){state[name]={readError:e.message};}
+ }
+ fs.writeFileSync(path.join(out,`chrome-profile-${stage}.json`),JSON.stringify(state,null,2));
+}
+
 function pass(name,detail){report.checks.push({name,result:'PASS',detail});console.log('PASS '+name);}
 async function until(fn,timeout=15000){const start=Date.now();while(Date.now()-start<timeout){const value=await fn();if(value)return value;await new Promise(r=>setTimeout(r,150));}throw Error('Condition timed out');}
 async function msg(type,data={}){return page.evaluate(async x=>chrome.runtime.sendMessage(x),{type,...data});}
@@ -63,8 +74,9 @@ async function discoverExtensionIdFromManager(settings,timeout=8000){
  return '';
 }
 async function open(){
- context=await chromium.launchPersistentContext(profile,{channel:browserName,headless:browserName==='chromium',ignoreDefaultArgs:['--disable-extensions'],args:[`--disable-extensions-except=${ext}`,`--load-extension=${ext}`,'--enable-unsafe-extension-debugging'],viewport:{width:520,height:1000}});
+ context=await chromium.launchPersistentContext(profile,{channel:browserName,headless:browserName==='chromium',ignoreDefaultArgs:['--disable-extensions'],args:browserName==='chrome'?['--enable-unsafe-extension-debugging']:[`--disable-extensions-except=${ext}`,`--load-extension=${ext}`,'--enable-unsafe-extension-debugging'],viewport:{width:520,height:1000}});
  let chromeSettings=null;
+ report.browserVersion=context.browser()?.version();saveChromeState('started');
  context.on('console',m=>{if(m.type()==='error'&&m.location().url.startsWith(`chrome-extension://${id}/`))report.errors.push(m.text());});
  context.on('weberror',e=>report.errors.push(e.error().stack));
  // Official builds may reject load-extension. Ask the browser's documented CDP unpacked loader as a second path.
@@ -95,12 +107,13 @@ async function open(){
      console.log('Chrome manager/profile did not expose unpacked extension id; using manifest-derived id '+id);
    }
  }
+ saveChromeState('installed');
  const extensionPageUrl=`chrome-extension://${id}/sidepanel.html`;
  if(browserName==='chrome'){
    if(!chromeSettings){chromeSettings=await context.newPage();await chromeSettings.goto('chrome://extensions/');}
    await chromeSettings.bringToFront();
    await new Promise((resolve,reject)=>{
-     const child=spawn('powershell.exe',['-NoProfile','-File',path.resolve('tools/click_chrome_extension_action.ps1'),'-ExtensionName',manifest.name,'-ProcessName','chrome','-ArtifactDir',out]);
+     const child=spawn('powershell.exe',['-NoProfile','-File',path.resolve('tools/click_chrome_extension_action.ps1'),'-ExtensionName',manifest.name,'-ActionTitle',manifest.action.default_title,'-ProcessName','chrome','-ArtifactDir',out]);
      child.stdout.on('data',d=>console.log(String(d)));child.stderr.on('data',d=>console.error(String(d)));
      child.on('error',reject);child.on('close',code=>code===0?resolve():reject(Error('Native Chrome extension action failed '+code)));
    });
@@ -144,7 +157,11 @@ async function waitLaunched(mission){return until(async()=>{const r=await local(
  // Let first-run onboarding finish, then close through its real button.
  await page.waitForTimeout(500);
  const close=page.locator('#onboardingCloseBtn');if(await close.isVisible())await close.click();
- if(browserName!=='chromium'){
+ if(browserName==='chrome'){
+   const panels=await page.evaluate(()=>chrome.runtime.getContexts({contextTypes:['SIDE_PANEL']}));
+   assert.ok(panels.some(c=>c.documentUrl===`chrome-extension://${id}/sidepanel.html`));
+   pass('Native Chrome toolbar click opens SIDE_PANEL',panels);
+ }else if(browserName!=='chromium'){
    await page.evaluate(async()=>{const w=await chrome.windows.getCurrent();const b=document.createElement('button');b.id='runtimeOpenSidePanel';b.textContent='Open native Side Panel';b.onclick=()=>chrome.sidePanel.open({windowId:w.id});document.body.prepend(b);});
    await page.locator('#runtimeOpenSidePanel').click();
    const panels=await until(()=>page.evaluate(async()=>{const c=await chrome.runtime.getContexts({contextTypes:['SIDE_PANEL']});return c.length&&c;}));
@@ -215,4 +232,4 @@ async function waitLaunched(mission){return until(async()=>{const r=await local(
  const integrity=await page.evaluate(()=>verifyBuildManifest());assert.ok(integrity.ok,JSON.stringify(integrity.mismatches));pass('Loaded source build hashes verified');
  await page.screenshot({path:path.join(out,'final.png'),fullPage:true});
  assert.deepEqual(report.errors,[]);pass('No captured console or page runtime errors');report.result='PASS';
- }catch(error){if(page)await page.screenshot({path:path.join(out,'failure.png'),fullPage:true}).catch(()=>{});report.result='FAIL';report.failure=error.stack;console.error(error);process.exitCode=1;}finally{if(context)await context.close().catch(()=>{});fs.writeFileSync(path.join(out,'report.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));fs.rmSync(profile,{recursive:true,force:true,maxRetries:3});}})();
+ }catch(error){if(page)await page.screenshot({path:path.join(out,'failure.png'),fullPage:true}).catch(()=>{});report.result='FAIL';report.failure=error.stack;console.error(error);process.exitCode=1;}finally{saveChromeState('finished');if(context)await context.close().catch(()=>{});fs.writeFileSync(path.join(out,'report.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));fs.rmSync(profile,{recursive:true,force:true,maxRetries:3});}})();
