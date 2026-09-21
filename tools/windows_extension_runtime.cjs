@@ -77,6 +77,7 @@ async function open(){
  context=await chromium.launchPersistentContext(profile,{channel:browserName,headless:browserName==='chromium',ignoreDefaultArgs:['--disable-extensions'],args:browserName==='chrome'?['--enable-unsafe-extension-debugging']:[`--disable-extensions-except=${ext}`,`--load-extension=${ext}`,'--enable-unsafe-extension-debugging'],viewport:{width:520,height:1000}});
  let chromeSettings=null;
  report.browserVersion=context.browser()?.version();saveChromeState('started');
+ context.on('page',p=>console.log('Browser Page attached: '+p.url()));
  context.on('console',m=>{if(m.type()==='error'&&m.location().url.startsWith(`chrome-extension://${id}/`))report.errors.push(m.text());});
  context.on('weberror',e=>report.errors.push(e.error().stack));
  // Official builds may reject load-extension. Ask the browser's documented CDP unpacked loader as a second path.
@@ -126,7 +127,7 @@ async function open(){
    },15000);
    console.log('Chrome native Side Panel target: '+JSON.stringify({targetId:sideTarget.targetId,type:sideTarget.type,url:sideTarget.url,title:sideTarget.title}));
    await probe.detach();
-   page=context.pages().find(p=>p.url()===extensionPageUrl)||null;
+   page=await until(()=>context.pages().find(p=>p.url()===extensionPageUrl),20000).catch(()=>null);
    if(!page){
      console.log('Chrome side panel target is not exposed as a Playwright Page. Context pages: '+JSON.stringify(context.pages().map(p=>p.url())));
      throw Error('Native Chrome Side Panel opened but is not exposed as a Playwright Page');
@@ -232,4 +233,4 @@ async function waitLaunched(mission){return until(async()=>{const r=await local(
  const integrity=await page.evaluate(()=>verifyBuildManifest());assert.ok(integrity.ok,JSON.stringify(integrity.mismatches));pass('Loaded source build hashes verified');
  await page.screenshot({path:path.join(out,'final.png'),fullPage:true});
  assert.deepEqual(report.errors,[]);pass('No captured console or page runtime errors');report.result='PASS';
- }catch(error){if(page)await page.screenshot({path:path.join(out,'failure.png'),fullPage:true}).catch(()=>{});report.result='FAIL';report.failure=error.stack;console.error(error);process.exitCode=1;}finally{saveChromeState('finished');if(context)await context.close().catch(()=>{});fs.writeFileSync(path.join(out,'report.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));fs.rmSync(profile,{recursive:true,force:true,maxRetries:3});}})();
+ }catch(error){if(page)await page.screenshot({path:path.join(out,'failure.png'),fullPage:true}).catch(()=>{});report.result='FAIL';report.failure=error.stack;console.error(error);process.exitCode=1;}finally{saveChromeState('finished');if(context)await context.close().catch(()=>{});saveChromeState('closed');fs.writeFileSync(path.join(out,'report.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));fs.rmSync(profile,{recursive:true,force:true,maxRetries:3});}})();
