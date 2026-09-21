@@ -1,7 +1,7 @@
 name: Windows Extension Runtime
 on:
   push:
-    branches: [main, 'fix/windows-runtime-*']
+    branches: [main, 'fix/windows-runtime-*', 'integrate/windows-runtime-main-*']
     paths: ['windows/**', 'tools/**', '.github/workflows/windows-runtime.yml', 'docs/platform-catalog.js', 'docs/sync-core.js']
   pull_request:
     paths: ['windows/**', 'tools/**', '.github/workflows/windows-runtime.yml', 'docs/platform-catalog.js', 'docs/sync-core.js']
