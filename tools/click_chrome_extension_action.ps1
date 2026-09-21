@@ -2,7 +2,9 @@ param(
   [string]$ExtensionName = "QuickBuy",
   [string]$ActionTitle = "",
   [string]$ProcessName = "chrome",
-  [string]$ArtifactDir = ""
+  [string]$ArtifactDir = "",
+  [switch]$SnapshotOnly,
+  [string]$EvidenceStage = "verified"
 )
 
 $ErrorActionPreference = "Stop"
@@ -163,6 +165,23 @@ function Get-Action {
   foreach($e in @(Get-ToolbarButtons)){
     if($e.Current.Name -match [regex]::Escape($ExtensionName) -or ($ActionTitle -and $e.Current.Name -eq $ActionTitle)){return $e}
   }
+}
+if($SnapshotOnly){
+  Save-UiaSnapshot -Stage $EvidenceStage -BrowserPid $proc.Id
+  $buttons=@(Get-ToolbarButtons)
+  if($ArtifactDir -and $buttons.Count){
+    $rects=@($buttons | ForEach-Object {$_.Current.BoundingRectangle})
+    $left=[int](($rects.Left | Measure-Object -Minimum).Minimum)
+    $top=[int](($rects.Top | Measure-Object -Minimum).Minimum)
+    $right=[int](($rects.Right | Measure-Object -Maximum).Maximum)
+    $bottom=[int](($rects.Bottom | Measure-Object -Maximum).Maximum)
+    if($right -gt $left -and $bottom -gt $top){
+      $bmp=New-Object System.Drawing.Bitmap ($right-$left),($bottom-$top)
+      $g=[System.Drawing.Graphics]::FromImage($bmp)
+      try{$g.CopyFromScreen($left,$top,0,0,$bmp.Size);$bmp.Save((Join-Path $ArtifactDir ('chrome-toolbar-'+$EvidenceStage+'.png')),[System.Drawing.Imaging.ImageFormat]::Png)}finally{$g.Dispose();$bmp.Dispose()}
+    }
+  }
+  exit 0
 }
 $target=$null
 $deadline=(Get-Date).AddSeconds(10)

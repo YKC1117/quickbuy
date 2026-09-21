@@ -105,7 +105,7 @@ async function attachNativePanel(target){
   const loc={first:()=>panel.locator(selector,0),evaluate,
    evaluateAll:fn=>panel.evaluate(new Function(`return (${fn.toString()})([...document.querySelectorAll(${JSON.stringify(selector)})])`)),
    count:()=>panel.evaluate(s=>document.querySelectorAll(s).length,selector),isVisible:visible,
-   waitFor:()=>until(visible),getAttribute:name=>evaluate((e,n)=>e.getAttribute(n),name),
+   waitFor:({state='visible'}={})=>until(state==='attached'?()=>evaluate(e=>!!e):visible),getAttribute:name=>evaluate((e,n)=>e.getAttribute(n),name),
    inputValue:()=>evaluate(e=>e.value),innerText:()=>evaluate(e=>e.innerText),
    click:async()=>{await until(visible);const r=await evaluate(e=>{e.scrollIntoView({block:'center'});const r=e.getBoundingClientRect();const x=r.x+r.width/2,y=r.y+r.height/2;const hit=document.elementFromPoint(x,y);if(!hit||!(e===hit||e.contains(hit)))throw Error('Control is obscured: '+e.id);return {x,y};});
     await client.send('Input.dispatchMouseEvent',{type:'mousePressed',...r,button:'left',clickCount:1});await client.send('Input.dispatchMouseEvent',{type:'mouseReleased',...r,button:'left',clickCount:1});},
@@ -122,6 +122,14 @@ async function attachNativePanel(target){
  assert.ok(proof.contexts.some(c=>c.contextType==='SIDE_PANEL'&&c.documentUrl===proof.url));
  fs.writeFileSync(path.join(out,`sidepanel-context-${openNativePanel.count}.json`),JSON.stringify({target,...proof},null,2));
  return panel;
+}
+async function captureNativeEvidence(stage){
+ if(browserName!=='chrome')return;
+ await new Promise((resolve,reject)=>{
+  const child=spawn('powershell.exe',['-NoProfile','-File',path.resolve('tools/click_chrome_extension_action.ps1'),'-SnapshotOnly','-EvidenceStage',stage,'-ArtifactDir',path.join(out,'evidence-'+stage)]);
+  child.stdout.on('data',d=>console.log(String(d)));child.stderr.on('data',d=>console.error(String(d)));
+  child.on('error',reject);child.on('close',code=>code===0?resolve():reject(Error('Native evidence capture failed '+code)));
+ });
 }
 async function openNativePanel(chromeSettings){
  const extensionPageUrl=`chrome-extension://${id}/sidepanel.html`;
@@ -148,7 +156,7 @@ openNativePanel.count=0;
 async function restorePanel(){
  if(browserName==='chrome'){const host=context.pages().find(p=>!p.url().startsWith('chrome-extension://'))||await context.newPage();await openNativePanel(host);}
  else{page=await context.newPage();await page.goto(`chrome-extension://${id}/sidepanel.html`);}
- await page.locator('#simpleTargetUrl').waitFor();
+ await page.locator('#simpleTargetUrl').waitFor({state:'attached'});
  cdp=page.cdp||await context.newCDPSession(page);
  cdp.on('ServiceWorker.workerErrorReported',e=>report.errors.push(JSON.stringify(e)));await cdp.send('ServiceWorker.enable');
 }
@@ -196,7 +204,7 @@ async function open(){
    page=await context.newPage();
    await page.goto(extensionPageUrl);
  }
- await page.locator('#simpleTargetUrl').waitFor();
+ await page.locator('#simpleTargetUrl').waitFor({state:'attached'});
  await until(async()=>(await msg('QBA_SELF_TEST_PING')).ok);
  const backgroundContexts=await until(()=>page.evaluate(async()=>{try{const rows=await chrome.runtime.getContexts({contextTypes:['BACKGROUND']});return rows.length?rows:null}catch(_){return null}}),20000);
  const playwrightWorker=context.serviceWorkers().find(w=>w.url()===`chrome-extension://${id}/background.js`);
@@ -222,6 +230,7 @@ async function waitLaunched(mission){return until(async()=>{const r=await local(
    const panels=await page.evaluate(()=>chrome.runtime.getContexts({contextTypes:['SIDE_PANEL']}));
    assert.ok(panels.some(c=>c.documentUrl===`chrome-extension://${id}/sidepanel.html`));
    pass('Native Chrome toolbar click opens SIDE_PANEL',panels);
+   await captureNativeEvidence('sidepanel-interactive');
  }else if(browserName!=='chromium'){
    await page.evaluate(async()=>{const w=await chrome.windows.getCurrent();const b=document.createElement('button');b.id='runtimeOpenSidePanel';b.textContent='Open native Side Panel';b.onclick=()=>chrome.sidePanel.open({windowId:w.id});document.body.prepend(b);});
    await page.locator('#runtimeOpenSidePanel').click();
@@ -366,5 +375,5 @@ async function waitLaunched(mission){return until(async()=>{const r=await local(
  for(let i=0;i<10;i++){await arm(url,60,60000);await Promise.all([msg('QBA_RUN_MAINTENANCE'),msg('QBA_DISARM_MISSION')]);assert.equal(await local('qbaArmedMission'),undefined);assert.equal(await page.evaluate(()=>chrome.alarms.get('qbaScheduledMission')),undefined);}pass('Maintenance/cancel race regression');
  const integrity=await page.evaluate(()=>verifyBuildManifest());assert.ok(integrity.ok,JSON.stringify(integrity.mismatches));pass('Loaded source build hashes verified');
  await page.screenshot({path:path.join(out,'final.png'),fullPage:true});
- assert.deepEqual(report.errors,[]);pass('No captured console or page runtime errors');report.result='PASS';
- }catch(error){if(page)await page.screenshot({path:path.join(out,'failure.png'),fullPage:true}).catch(()=>{});report.result='FAIL';report.failure=error.stack;console.error(error);process.exitCode=1;}finally{saveChromeState('finished');if(context)await context.close().catch(()=>{});saveChromeState('closed');fs.writeFileSync(path.join(out,'report.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));fs.rmSync(profile,{recursive:true,force:true,maxRetries:3});}})();
+ assert.deepEqual(report.errors,[]);pass('No captured console or page runtime errors');await captureNativeEvidence('final');report.result='PASS';
+ }catch(error){await captureNativeEvidence('failure').catch(e=>console.error(e));if(page)await page.screenshot({path:path.join(out,'failure.png'),fullPage:true}).catch(()=>{});report.result='FAIL';report.failure=error.stack;console.error(error);process.exitCode=1;}finally{saveChromeState('finished');if(context)await context.close().catch(()=>{});saveChromeState('closed');fs.writeFileSync(path.join(out,'report.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));fs.rmSync(profile,{recursive:true,force:true,maxRetries:3});}})();
