@@ -1,34 +1,33 @@
 name: Publish QuickBuy 1.0
 on:
-  push:
+  workflow_run:
+    workflows: ['Windows Extension Runtime']
+    types: [completed]
     branches: [main]
-    paths:
-      - 'release-assets/**'
-      - '.github/workflows/publish.yml'
-  workflow_dispatch:
 permissions:
   contents: write
 jobs:
   release:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Rebuild Windows package
-        shell: bash
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - name: Package the exact Windows-accepted commit
         run: |
-          cat release-assets/windows.part.* | base64 -d > QuickBuy-1.0-Windows.zip
-          echo "3447de0a3bb9f90427b6c3352ed15e88378a53426b696807d7cd732575f5ec2a  QuickBuy-1.0-Windows.zip" > QuickBuy-1.0-SHA256SUMS.txt
+          python tools/package_windows.py --verify
+          python tools/package_windows.py
+          cd runtime-results
           sha256sum -c QuickBuy-1.0-SHA256SUMS.txt
           unzip -t QuickBuy-1.0-Windows.zip
-      - name: Publish or update v1.0.0
+      - name: Publish verified Windows package
         env:
           GH_TOKEN: ${{ github.token }}
-        shell: bash
+          VERIFIED_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           if gh release view v1.0.0 >/dev/null 2>&1; then
-            gh release upload v1.0.0 QuickBuy-1.0-Windows.zip QuickBuy-1.0-SHA256SUMS.txt --clobber
+            gh release upload v1.0.0 runtime-results/QuickBuy-1.0-Windows.zip runtime-results/QuickBuy-1.0-SHA256SUMS.txt --clobber
           else
-            gh release create v1.0.0 QuickBuy-1.0-Windows.zip QuickBuy-1.0-SHA256SUMS.txt \
-              --target main --title "QuickBuy 1.0" \
-              --notes "QuickBuy 1.0 免費正式分享版。Windows：下載 ZIP、解壓縮後依安裝精靈載入 Chrome / Edge。iPhone / iPad 使用 GitHub Pages PWA。登入、CAPTCHA、OTP、官方 Queue、付款與最後確認維持人工處理。"
+            gh release create v1.0.0 runtime-results/QuickBuy-1.0-Windows.zip runtime-results/QuickBuy-1.0-SHA256SUMS.txt --target "$VERIFIED_SHA" --title 'QuickBuy 1.0' --notes 'Windows runtime verified; login, verification, queue, payment and final confirmation remain manual.'
           fi
