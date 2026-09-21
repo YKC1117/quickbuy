@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>QuickBuy｜開始這裡</title>
+<style>
+:root{color-scheme:dark;font-family:Inter,"Noto Sans TC","Microsoft JhengHei",system-ui,sans-serif;background:#08111f;color:#edf4ff}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 15% 0,#173e7d55,transparent 35%),linear-gradient(180deg,#08111f,#0b1320);min-height:100vh}.wrap{max-width:980px;margin:auto;padding:28px 18px 60px}.hero{padding:28px;border:1px solid #2a4166;border-radius:24px;background:#0d192bde;box-shadow:0 25px 80px #0008}.eyebrow{font-size:12px;font-weight:900;letter-spacing:.18em;color:#72a6ff}.hero h1{font-size:38px;margin:8px 0 6px}.hero p{margin:0;color:#aab9cc;line-height:1.7}.status{display:flex;gap:8px;flex-wrap:wrap;margin-top:18px}.chip{padding:7px 10px;border:1px solid #35517f;border-radius:999px;color:#bcd1ef;background:#12223b;font-size:12px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:18px}.card{padding:18px;border:1px solid #253957;border-radius:18px;background:#0d1726}.num{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:linear-gradient(135deg,#3b82f6,#7358ff);font-weight:900}.card h2{font-size:17px;margin:12px 0 7px}.card p,.small{color:#9dacc0;font-size:13px;line-height:1.65}.code{display:block;margin:9px 0;padding:11px;border-radius:10px;background:#07101b;color:#a9c8ff;border:1px solid #223856;word-break:break-all;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}.btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}button,a.btn{appearance:none;border:1px solid #3a5f95;border-radius:10px;background:#17325a;color:white;padding:10px 12px;font-weight:800;cursor:pointer;text-decoration:none}.primary{background:linear-gradient(135deg,#2f7df4,#6559ff)!important;border-color:#6d8cff!important}.section{margin-top:18px;padding:20px;border:1px solid #233754;border-radius:20px;background:#0b1625}.section h2{margin:0 0 6px}.gallery{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}.gallery img{width:100%;border-radius:14px;border:1px solid #2c4160;background:white}.safe{display:grid;grid-template-columns:1fr 1fr;gap:10px}.safe div{padding:11px;border-radius:12px;background:#101c2e;border:1px solid #253957}.good{color:#65e4a2}.warn{color:#ffd36b}footer{margin-top:20px;text-align:center;color:#71839b;font-size:12px}@media(max-width:760px){.grid,.gallery,.safe{grid-template-columns:1fr}.hero h1{font-size:30px}}
+</style>
+</head>
+<body><div class="wrap">
+<section class="hero"><div class="eyebrow">QUICKBUY · 1.0</div><h1>第一次使用，從這裡開始</h1><p>這個頁面是給家人、朋友或第一次安裝的人看的。照著 3 個步驟做就可以，不需要理解程式。</p><div class="status"><span class="chip">Windows Chrome / Edge</span><span class="chip">內建圖像教學</span><span class="chip">安全分享包</span><span class="chip">不保存帳密 / OTP / 付款資料</span></div></section>
+<div class="grid">
+<section class="card"><div class="num">1</div><h2>解壓縮整個資料夾</h2><p>不要只打開 ZIP 裡面的單一檔案。解壓後應該看得到 <b>manifest.json</b>、<b>sidepanel.js</b>、<b>icons</b> 等內容。</p></section>
+<section class="card"><div class="num">2</div><h2>開啟擴充功能頁</h2><p>Chrome 請輸入：</p><span class="code">chrome://extensions/</span><p>Edge 請輸入：</p><span class="code">edge://extensions/</span><div class="btns"><button onclick="copyText('chrome://extensions/')">複製 Chrome 網址</button><button onclick="copyText('edge://extensions/')">複製 Edge 網址</button></div></section>
+<section class="card"><div class="num">3</div><h2>載入 QuickBuy</h2><p>開啟「開發人員模式」→「載入未封裝項目」→ 選擇含有 <b>manifest.json</b> 的整個 QuickBuy 資料夾。</p><p class="small">成功後點瀏覽器右上角 QuickBuy 圖示，就會開啟側邊欄。</p></section>
+</div>
+<section class="section"><h2>安裝完成後怎麼用？</h2><p class="small">第一次開啟會看到新手引導，1.0 會自動先做本機安裝體檢，並提供一鍵復原點。朋友傳給你的 QuickBuy 家人分享包，可以直接從新手引導匯入；之後右上角「資料」可隨時做安全備份、復原點、還原與診斷。</p><div class="safe"><div><b class="good">✓ 會分享</b><br><span class="small">快捷網站、常用平台排序</span></div><div><b class="warn">✕ 不會分享</b><br><span class="small">帳號、密碼、Cookie、Token、OTP、付款資料、執行中的任務</span></div></div></section>
+<section class="section"><h2>快速教學</h2><ol><li>開啟 Chrome 或 Edge 的擴充功能頁面。</li><li>開啟「開發人員模式」。</li><li>選「載入未封裝項目」，指定 QuickBuy-Extension 資料夾。</li><li>釘選 QuickBuy，開啟側邊欄即可使用。</li></ol></section>
+<section class="section"><h2>資料、備份與遇到問題</h2><p class="small">QuickBuy 右上角「資料」可以做一鍵體檢、安全備份 / 合併還原、家人分享與去識別化診斷。安全備份包含快捷網站與常用平台排序，匯入前會自動建立本機復原點；不匯出姓名、Email、電話、地址、密碼、OTP、Cookie、Token 或付款資料。</p></section>
+<footer>QuickBuy · 讓第一次使用的人也能快速上手</footer>
+</div>
+<script>async function copyText(t){try{await navigator.clipboard.writeText(t);alert('已複製：'+t)}catch(e){prompt('請複製以下內容：',t)}}</script>
+</body></html>
