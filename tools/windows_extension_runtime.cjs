@@ -236,7 +236,24 @@ async function waitLaunched(mission){return until(async()=>{const r=await local(
 
  // Let first-run onboarding finish, then close through its real button.
  await page.waitForTimeout(500);
- const close=page.locator('#onboardingCloseBtn');if(await close.isVisible())await close.click();
+ const close=page.locator('#onboardingCloseBtn');if(await close.isVisible()){
+   await page.evaluate(()=>{
+     const modal=document.getElementById('onboardingModal');
+     globalThis.qbaOnboardingFocusExit=null;
+     modal.addEventListener('focusout',e=>{
+       if(!modal.contains(e.relatedTarget))globalThis.qbaOnboardingFocusExit={hidden:modal.hidden,ariaHidden:modal.getAttribute('aria-hidden'),targetId:e.relatedTarget?.id};
+     });
+   });
+   await close.click();
+   await until(()=>page.evaluate(()=>document.getElementById('onboardingModal').hidden));
+   const focus=await page.evaluate(()=>{
+     const modal=document.getElementById('onboardingModal'),active=document.activeElement;
+     return {exit:globalThis.qbaOnboardingFocusExit,hidden:modal.hidden,ariaHidden:modal.getAttribute('aria-hidden'),inside:modal.contains(active),targetId:active.id,visible:active.checkVisibility({checkVisibilityCSS:true}),interactive:active.matches('button,input,select,textarea,a[href]')&&!active.disabled};
+   });
+   assert.ok(focus.exit,'Modal must release focus');assert.equal(focus.exit.hidden,false);assert.equal(focus.exit.ariaHidden,'false');
+   assert.equal(focus.inside,false);assert.ok(focus.visible&&focus.interactive);assert.equal(focus.ariaHidden,'true');
+   pass('Onboarding releases focus before hiding to visible interactive control',focus);
+ }
  if(browserName==='chrome'){
    const panels=await page.evaluate(()=>chrome.runtime.getContexts({contextTypes:['SIDE_PANEL']}));
    assert.ok(panels.some(c=>c.documentUrl===`chrome-extension://${id}/sidepanel.html`));

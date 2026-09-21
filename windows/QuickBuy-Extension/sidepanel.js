@@ -3398,6 +3398,13 @@ document.addEventListener("visibilitychange", () => {
   let pageIndex = 1;
   const setOpen = (el, open) => {
     if (!el) return;
+    // Move focus before hiding its ancestor so assistive technology never sees
+    // a focused control inside an aria-hidden guide dialog.
+    if (!open && el.contains(document.activeElement)) {
+      const target = [q("simplePlatformSearch"), q("simpleTargetUrl"), q("helpBtn"), q("dataCenterBtn")]
+        .find(node => node && !el.contains(node) && !node.disabled && node.checkVisibility({checkVisibilityCSS:true}));
+      target?.focus({preventScroll:true});
+    }
     el.hidden = !open;
     el.setAttribute("aria-hidden", open ? "false" : "true");
     document.body.classList.toggle("guide-open", !!document.querySelector(".guide-modal:not([hidden])"));
