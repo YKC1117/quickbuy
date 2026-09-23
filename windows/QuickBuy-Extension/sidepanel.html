@@ -1,0 +1,939 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>QuickBuy 搶購助手</title>
+  <link rel="stylesheet" href="sidepanel.css" />
+</head>
+<body class="simple-active">
+  <header class="appbar">
+    <div>
+      <div class="eyebrow">QUICKBUY</div>
+      <h1>搶購助手</h1>
+    </div>
+    <div class="appbar-actions">
+      <button id="dataCenterBtn" class="mini data-toggle" title="資料、備份與診斷">資料</button>
+      <button id="helpBtn" class="mini help-toggle" title="使用教學">教學</button>
+      <button id="uiModeToggleBtn" class="mini ui-mode-toggle">進階設定</button>
+      <button id="liveModeBtn" class="mini live-toggle">臨場模式</button>
+      <div id="statusDot" class="status-dot idle" title="目前狀態"></div>
+    </div>
+  </header>
+
+  <section id="liveModePanel" class="live-mode-panel" aria-hidden="true">
+    <div class="live-topline">
+      <span>QUICKBUY LIVE</span>
+      <button id="exitLiveModeBtn" class="mini">返回設定</button>
+    </div>
+    <div id="liveStatusBadge" class="live-status-badge idle">尚未啟動</div>
+    <div id="liveCountdown" class="live-countdown">--:--:--</div>
+    <div id="liveStatusText" class="live-status-text">等待設定</div>
+    <div class="live-grid">
+      <div><span>戰備</span><b id="liveReadiness">—</b></div>
+      <div><span>頁面</span><b id="livePhase">—</b></div>
+      <div><span>順位</span><b id="livePriority">—</b></div>
+      <div><span>校時</span><b id="liveClock">本機</b></div>
+      <div><span>網路</span><b id="liveNetwork">未測</b></div>
+    </div>
+    <div class="live-actions">
+      <button id="liveFocusBtn" class="ghost">切回目標頁</button>
+      <button id="liveResumeBtn" class="success" disabled>我已處理驗證，繼續</button>
+      <button id="liveStopBtn" class="danger-lite" disabled>停止</button>
+    </div>
+    <p class="live-footnote">QuickBuy 會協助準備與操作到最後確認前；付款、最終下單、CAPTCHA / OTP / 登入 / Queue 一律由你接手。</p>
+  </section>
+
+  <main id="simpleWorkspace" class="simple-workspace">
+    <section class="simple-hero card">
+      <div class="simple-brandline">
+        <div>
+          <span class="simple-kicker">快速模式</span>
+          <h2>設定完成就待命</h2>
+        </div>
+        <span id="simpleStatePill" class="simple-state-pill idle">尚未啟動</span>
+      </div>
+      <div class="simple-countdown-wrap">
+        <span>開賣倒數</span>
+        <strong id="simpleCountdown">尚未設定</strong>
+      </div>
+      <p id="simpleStatusText" class="simple-status-copy">先設定目標頁與開賣時間。</p>
+      <div id="simpleNotice" class="simple-notice" hidden role="status" aria-live="polite"></div>
+    </section>
+
+    <section id="simpleSetupCard" class="simple-step card">
+      <div class="simple-step-head"><span>1</span><div><b>設定目標</b><small>填好後自動收合，不佔畫面</small></div><button id="simpleEditSetupBtn" class="mini simple-edit-btn" hidden>修改</button></div>
+      <div id="simpleSetupSummary" class="simple-setup-summary" hidden>
+        <div><span>目標</span><b id="simpleSummaryTarget">尚未設定</b></div>
+        <div><span>時間</span><b id="simpleSummaryTime">—</b></div>
+        <div><span>數量</span><b id="simpleSummaryQty">1</b></div>
+      </div>
+      <div id="simpleSetupFields">
+      <label>平台快捷入口 <span class="optional">售票 / 購物分開，不混在一起</span></label>
+      <div id="simpleRecentPlatformRow" class="simple-recent-platform" hidden>
+        <button id="simpleRecentPlatformBtn" type="button" class="simple-recent-platform-main">
+          <span>最近使用</span><b id="simpleRecentPlatformName">—</b><small>一鍵開啟</small>
+        </button>
+        <button id="simpleClearRecentPlatformBtn" type="button" class="simple-recent-platform-clear" title="清除最近使用" aria-label="清除最近使用">×</button>
+      </div>
+      <input id="simplePlatformSearch" class="simple-platform-search" type="search" maxlength="60" placeholder="搜尋平台，例如：蝦皮、拓元、momo" autocomplete="off" />
+      <div id="simplePlatformQuickPick" class="simple-platform-launcher" aria-label="平台快捷選擇">
+        <details class="simple-platform-group" open>
+          <summary><span>🎫 售票平台</span><small id="simpleTicketPlatformCount">0</small></summary>
+          <div id="simpleTicketPlatformQuickPick" class="simple-platform-quick-pick"></div>
+        </details>
+        <details class="simple-platform-group">
+          <summary><span>🛒 購物平台</span><small id="simpleShoppingPlatformCount">0</small></summary>
+          <div id="simpleShoppingPlatformQuickPick" class="simple-platform-quick-pick"></div>
+          <p class="simple-quick-pick-note">購物平台目前提供快捷開啟、平台辨識與安全狀態模型；送出訂單、付款、CAPTCHA / OTP 仍由你確認。</p>
+        </details>
+      </div>
+      <p class="simple-quick-pick-note">點一下就會帶入官方網站並開啟；最近用過的平台會自動排前面。進到同平台活動 / 商品頁後 QuickBuy 會優先採用目前分頁，不用再複製網址。</p>
+
+      <label>我的快捷網站 <span class="optional">商城 / 限量商品 / 其他活動網站</span></label>
+      <div class="simple-custom-shortcut-actions">
+        <button id="simpleSaveCurrentShortcutBtn" type="button" class="mini">收藏目前頁面</button>
+        <button id="simpleAddShortcutBtn" type="button" class="mini">＋ 新增網址</button>
+      </div>
+      <details id="simpleShortcutManager" class="simple-shortcut-manager">
+        <summary>管理 / 搜尋 / 分享快捷網站</summary>
+        <div class="simple-shortcut-manager-body">
+          <input id="simpleShortcutSearch" type="search" maxlength="80" placeholder="搜尋名稱或網址" autocomplete="off" />
+          <div id="simpleShortcutFilters" class="simple-shortcut-filters" aria-label="快捷網站分類">
+            <button type="button" data-shortcut-filter="all" class="active">全部</button>
+            <button type="button" data-shortcut-filter="ticket">售票</button>
+            <button type="button" data-shortcut-filter="shop">商城</button>
+            <button type="button" data-shortcut-filter="event">活動</button>
+            <button type="button" data-shortcut-filter="other">其他</button>
+          </div>
+          <div class="simple-custom-shortcut-actions compact">
+            <button id="simpleFamilyPackExportBtn" type="button" class="mini ghost">分享給家人 / 朋友</button>
+            <button id="simpleFamilyPackImportBtn" type="button" class="mini ghost">匯入分享包</button>
+            <button id="simpleShortcutExportBtn" type="button" class="mini ghost">只匯出快捷網站</button>
+            <button id="simpleShortcutImportBtn" type="button" class="mini ghost">匯入快捷舊檔</button>
+            <input id="simpleFamilyPackImportFile" type="file" accept="application/json,.json" hidden />
+            <input id="simpleShortcutImportFile" type="file" accept="application/json,.json" hidden />
+          </div>
+        </div>
+      </details>
+      <div id="simpleCustomShortcutForm" class="simple-custom-shortcut-form" hidden>
+        <input id="simpleCustomShortcutName" maxlength="40" placeholder="快捷名稱，例如：官方商城" />
+        <input id="simpleCustomShortcutUrl" type="url" inputmode="url" placeholder="https://..." />
+        <select id="simpleCustomShortcutCategory" aria-label="快捷網站分類">
+          <option value="other">其他</option>
+          <option value="ticket">售票</option>
+          <option value="shop">商城</option>
+          <option value="event">活動</option>
+        </select>
+        <div class="simple-custom-shortcut-form-actions">
+          <button id="simpleCustomShortcutSaveBtn" type="button" class="mini">儲存</button>
+          <button id="simpleCustomShortcutCancelBtn" type="button" class="mini ghost">取消</button>
+        </div>
+      </div>
+      <div id="simpleCustomShortcutList" class="simple-custom-shortcut-list" aria-label="我的快捷網站"></div>
+      <p class="simple-quick-pick-note">快捷網站會同步到其他裝置；為避免把登入資訊帶進同步，收藏時只保存網址的網域與路徑，不保存 query / hash / token。</p>
+
+      <label>目標頁面 <span class="optional">其他網站可直接輸入</span></label>
+      <div class="inline">
+        <input id="simpleTargetUrl" type="url" placeholder="https://..." />
+        <button id="simpleUseCurrentBtn" class="mini">目前頁面</button>
+      </div>
+      <div class="grid2 simple-grid">
+        <div><label>開賣日期</label><input id="simpleSaleDate" type="date" /></div>
+        <div><label>開賣時間</label><input id="simpleSaleTime" type="time" step="1" /></div>
+      </div>
+      <div class="grid2 simple-grid">
+        <div><label>數量</label><input id="simpleQuantity" type="number" min="1" max="20" value="1" /></div>
+        <div><label>單價上限 <span class="optional">選填</span></label><input id="simpleMaxPrice" type="number" min="0" step="1" placeholder="例如 3880" /></div>
+      </div>
+      </div>
+    </section>
+
+    <section class="simple-step card">
+      <div class="simple-step-head"><span>2</span><div><b>確認狀態</b><small>有問題才會提醒你處理</small></div></div>
+      <div class="simple-check-list">
+        <div><i id="simpleTargetDot" class="simple-dot idle"></i><span>目標頁面</span><b id="simpleTargetState">尚未鎖定</b></div>
+        <div><i id="simplePlatformDot" class="simple-dot idle"></i><span>平台辨識</span><b id="simplePlatformState">等待網址</b></div>
+        <div><i id="simpleReadyDot" class="simple-dot idle"></i><span>開賣前檢查</span><b id="simpleReadyState">尚未檢查</b></div>
+        <div><i id="simpleSyncDot" class="simple-dot idle"></i><span>跨裝置設定</span><b id="simpleSyncState">本機可用</b></div>
+      </div>
+      <button id="simplePreflightBtn" class="ghost simple-wide" disabled>一鍵檢查</button>
+    </section>
+
+    <section class="simple-step simple-start-card card">
+      <div class="simple-step-head"><span>3</span><div><b>開始待命</b><small>需要你處理時才會提醒</small></div></div>
+      <button id="simpleStartBtn" class="primary simple-main-action" disabled>開始待命</button>
+      <button id="simpleResumeBtn" class="success simple-wide" disabled>我已完成驗證，繼續</button>
+      <button id="simpleStopBtn" class="ghost simple-wide" disabled>停止</button>
+      <p class="simple-footnote">CAPTCHA、OTP、登入或 Queue 等需要真人處理時會停下來提醒你。</p>
+    </section>
+
+    <button id="openAdvancedBtn" class="simple-advanced-link">需要更多設定？開啟進階模式</button>
+  </main>
+
+  <main id="advancedWorkspace" class="advanced-workspace" hidden>
+    <section class="hero card">
+      <div class="hero-line">
+        <span class="label">開賣倒數</span>
+        <strong id="countdown">尚未設定</strong>
+      </div>
+      <div id="statusText" class="status-text">尚未啟動</div>
+      <div id="targetLock" class="target-lock idle">
+        <div><span>目標分頁</span><strong id="targetLockText">尚未鎖定</strong></div>
+        <button id="focusTargetBtn" class="mini" disabled>切回目標</button>
+      </div>
+      <div id="telemetry" class="telemetry">
+        <span>操作 <b id="clickCountText">0</b>/20</span>
+        <span>順位 <b id="priorityText">—</b></span>
+        <span>頁面 <b id="visibilityText">—</b></span>
+        <span>節流 <b id="rateText">0/8</b></span>
+      </div>
+      <div class="button-row">
+        <button id="startBtn" class="primary">開始待命</button>
+        <button id="resumeBtn" class="success" disabled>驗證完成，繼續</button>
+        <button id="stopBtn" class="ghost" disabled>停止</button>
+      </div>
+    </section>
+
+    <section class="card mission-card">
+      <div class="section-head">
+        <h2>任務狀態 <span class="badge">1.0</span></h2>
+        <button id="refreshMissionBtn" class="mini">更新狀態</button>
+      </div>
+      <div class="readiness-wrap">
+        <div class="readiness-score"><strong id="readinessScore">—</strong><span>/100</span></div>
+        <div class="readiness-main">
+          <div id="readinessText" class="readiness-text">尚未執行開賣前健檢</div>
+          <div class="readiness-bar"><i id="readinessBar"></i></div>
+        </div>
+      </div>
+      <div class="mission-grid">
+        <div><span>頁面階段</span><b id="pagePhaseText">尚未分析</b></div>
+        <div><span>最後健檢</span><b id="lastPreflightText">尚未執行</b></div>
+        <div><span>自動恢復</span><b id="recoveryText">0 次</b></div>
+        <div><span>校時可信度</span><b id="clockQualityText">未同步</b></div>
+        <div><span>目標網路</span><b id="networkStateText">尚未測試</b></div>
+        <div><span>最近 RTT</span><b id="networkRttText">—</b></div>
+      </div>
+      <div class="selector-health">
+        <span>手動 selector</span>
+        <div class="selector-health-grid">
+          <b id="healthPurchase" class="health unset">購買：未設定</b>
+          <b id="healthQuantity" class="health unset">數量：未設定</b>
+          <b id="healthPrice" class="health unset">價格：未設定</b>
+        </div>
+      </div>
+      <div class="timeline-head"><span>頁面狀態變化</span><small>最多顯示最近 6 筆</small></div>
+      <div id="stateTimeline" class="state-timeline"><div class="timeline-empty">尚無狀態變化</div></div>
+    </section>
+
+    <section class="card task-card">
+      <div class="section-head">
+        <h2>任務模板 <span class="badge">1.0</span></h2>
+        <span id="taskCountBadge" class="rule-count">0 任務</span>
+      </div>
+      <p class="hint strong">保存網址、時間、順位、數量、預算與 selector；不保存姓名、Email、電話、地址等個人資料。</p>
+      <label>任務名稱</label>
+      <input id="taskName" placeholder="例如：演唱會 A場 2張 / 陀螺首發" autocomplete="off" />
+      <label>已保存任務</label>
+      <select id="taskSelect"><option value="">尚無任務模板</option></select>
+      <div class="button-row compact">
+        <button id="saveTaskBtn" class="primary small-flex">儲存目前任務</button>
+        <button id="loadTaskBtn" class="ghost small-flex" disabled>載入</button>
+        <button id="deleteTaskBtn" class="danger-lite" disabled>刪除</button>
+      </div>
+      <div id="taskMeta" class="profile-state">尚未選取任務</div>
+    </section>
+
+    <section class="card mission-card">
+      <div class="section-head">
+        <h2>開賣提醒 <span class="badge">1.0</span></h2>
+        <span id="armedMissionBadge" class="rule-count neutral">未設定</span>
+      </div>
+      <p class="hint strong">設定後，QuickBuy 會在指定時間把目標網站帶到前景並提醒你。登入、驗證、排隊、付款與最後確認仍由你完成。</p>
+      <div class="grid2">
+        <div>
+          <label>提前開啟</label>
+          <select id="missionLeadSec">
+            <option value="60">開賣前 1 分鐘</option>
+            <option value="180">開賣前 3 分鐘</option>
+            <option value="300" selected>開賣前 5 分鐘</option>
+            <option value="600">開賣前 10 分鐘</option>
+            <option value="900">開賣前 15 分鐘</option>
+            <option value="1800">開賣前 30 分鐘</option>
+            <option value="3600">開賣前 60 分鐘</option>
+          </select>
+        </div>
+        <div>
+          <label>逾時寬限</label>
+          <select id="missionGraceSec">
+            <option value="30">30 秒</option>
+            <option value="60">60 秒</option>
+            <option value="120" selected>120 秒</option>
+          </select>
+        </div>
+      </div>
+      <div id="armedMissionState" class="profile-state">尚未設定開賣提醒</div>
+      <div class="button-row compact">
+        <button id="armMissionBtn" class="success small-flex">設定開賣提醒</button>
+        <button id="disarmMissionBtn" class="danger-lite" disabled>取消提醒</button>
+      </div>
+      <p class="hint">提醒只會開啟／切換到目標頁面，不會自動送出訂單或付款。</p>
+    </section>
+
+    <section class="card">
+      <h2>1. 目標與時間</h2>
+      <label>購買頁網址</label>
+      <div class="inline">
+        <input id="targetUrl" type="url" placeholder="https://..." />
+        <button id="useCurrentBtn" class="mini">目前頁面</button>
+      </div>
+
+      <div class="grid2">
+        <div>
+          <label>開賣日期</label>
+          <input id="saleDate" type="date" />
+        </div>
+        <div>
+          <label>開賣時間</label>
+          <input id="saleTime" type="time" step="1" />
+        </div>
+      </div>
+
+      <div class="grid2">
+        <div>
+          <label>數量</label>
+          <input id="quantity" type="number" min="1" max="20" value="1" />
+        </div>
+        <div>
+          <label>單價上限（選填）</label>
+          <input id="maxPrice" type="number" min="0" step="1" placeholder="例如 3880" />
+        </div>
+      </div>
+
+
+
+      <label>檢查間隔</label>
+      <select id="intervalMs">
+        <option value="1000">約 1 秒（較積極）</option>
+        <option value="1500" selected>約 1.5 秒（建議）</option>
+        <option value="2500">約 2.5 秒</option>
+        <option value="5000">約 5 秒（保守）</option>
+      </select>
+      <p class="hint">會加入少量隨機延遲，不做高頻轟炸式請求。</p>
+
+      <div class="sync-row">
+        <div>
+          <label>網站時間校正</label>
+          <div id="clockState" class="clock-state">尚未同步 · 使用電腦時間</div>
+        </div>
+        <button id="syncClockBtn" class="mini">同步網站時間</button>
+      </div>
+      <p class="hint">會做多次取樣並顯示 RTT / 抖動 / 可信度；網站 Date 標頭通常只有秒級精度，抓不到時仍使用 Windows 時間。</p>
+
+      <div class="sync-row network-probe-row">
+        <div>
+          <label>目標網站網路監測</label>
+          <div id="networkState" class="clock-state">尚未測試 · 執行中每 10 秒低頻檢查一次</div>
+        </div>
+        <button id="networkTestBtn" class="mini">立即測試</button>
+      </div>
+      <p class="hint">只對目標網站根網域做 HEAD 探測，不會重送完整購買網址；不是網速測速器，只用來發現目標網站連線異常或延遲突然上升。</p>
+
+      <label>警報模式</label>
+      <div class="inline alert-setting">
+        <select id="soundMode">
+          <option value="voice" selected>提示音＋中文語音（建議）</option>
+          <option value="tone">只播放提示音</option>
+          <option value="silent">靜音</option>
+        </select>
+        <button id="testSoundBtn" class="mini">測試</button>
+      </div>
+
+      <label>執行模式</label>
+      <select id="operationMode">
+        <option value="live" selected>正式模式：自動操作，但最後送單前停止</option>
+        
+        <option value="dry">測試模式：只標示，不實際點擊</option>
+      </select>
+      <p class="hint">正式模式會協助到最後確認前並停手；付款、最終下單、CAPTCHA、OTP/2FA、官方 Queue、登入及付款服務商驗證都必須由你完成。</p>
+    </section>
+
+
+    <section class="card">
+      <div class="section-head">
+        <h2>2. 開賣前健檢</h2>
+        <button id="preflightBtn" class="mini">檢查目前頁面</button>
+      </div>
+      <p class="hint strong">正式開賣前先跑一次，確認頁面權限、時間、數量、價格保護、指定元素與驗證狀態。</p>
+      <div id="preflightResult" class="preflight-box">
+        <div class="preflight-empty">尚未執行健檢</div>
+      </div>
+    </section>
+
+    <section class="card rehearsal-card">
+      <div class="section-head">
+        <h2>3. 實戰模擬演練</h2>
+        <button id="rehearsalBtn" class="mini">執行演練</button>
+      </div>
+      <p class="hint strong">只分析目前頁面與既有規則，不會真的點擊、送單或跳過 Queue。適合開賣前確認順位、數量、價格與下一步辨識是否正常。</p>
+      <div class="rehearsal-summary">
+        <div><span>演練分數</span><b id="rehearsalScore">—</b></div>
+        <div><span>最後演練</span><b id="rehearsalAt">尚未執行</b></div>
+      </div>
+      <div id="rehearsalResult" class="preflight-box"><div class="preflight-empty">尚未執行模擬演練</div></div>
+    </section>
+
+    <section class="card">
+      <h2>4. 網站設定檔</h2>
+      <div id="siteProfileState" class="profile-state">尚未指定網站</div>
+      <p class="hint">把這個網站的順位與元素對應記住。可選整個網域共用，或只套用目前路徑；有多組規則時會自動選最精準的一組。</p>
+      <label>設定檔套用範圍</label>
+      <select id="profileScope">
+        <option value="path" selected>目前路徑前綴（較精準）</option>
+        <option value="origin">整個網域</option>
+      </select>
+      <div class="button-row compact">
+        <button id="saveProfileBtn" class="primary small-flex">儲存目前網站</button>
+        <button id="loadProfileBtn" class="ghost small-flex">套用設定</button>
+        <button id="deleteProfileBtn" class="danger-lite">刪除</button>
+      </div>
+    </section>
+
+    <section class="card platform-profile-card">
+      <div class="section-head">
+        <h2>5. 網站 Profile 中心</h2>
+        <span id="platformProfileCount" class="rule-count">0 Profile</span>
+      </div>
+      <div id="platformProfileState" class="profile-state">尚未安裝平台 Profile</div>
+      <p class="hint strong">Profile 是整个平台的安全封裝：包含適用網域/路徑、版本、支援能力與內嵌 selector 規則。執行時優先於單獨專用規則；失效時仍會回退，不會執行下載來的 JavaScript。</p>
+      <label>Profile 模式</label>
+      <select id="platformProfileMode">
+        <option value="auto" selected>自動：符合網站時優先使用 Profile</option>
+        <option value="off">關閉：略過 Profile，使用原本規則鏈</option>
+      </select>
+      <label>已安裝 Profile</label>
+      <select id="platformProfileSelect"><option value="">尚無 Profile</option></select>
+      <div class="platform-profile-grid">
+        <div><span>版本 / 狀態</span><b id="platformProfileMeta">—</b></div>
+        <div><span>支援能力</span><b id="platformProfileCapabilities">—</b></div>
+      </div>
+      <div id="platformProfileConflicts" class="profile-conflict">目前沒有規則衝突</div>
+
+      <div class="profile-builder-box">
+        <div class="timeline-head"><span>Profile 建立精靈</span><small id="profileBuilderState">尚未建立草稿</small></div>
+        <p class="hint">直接掃描目前網站產生宣告式 Profile 草稿；先乾跑驗證，通過後才允許安裝。建立過程不會點擊、送單、破解 CAPTCHA 或繞過 Queue。</p>
+        <label>Profile 名稱</label>
+        <input id="profileBuilderName" placeholder="例如：票務平台 A / 官方商城" autocomplete="off" />
+        <div class="grid2">
+          <div>
+            <label>套用範圍</label>
+            <select id="profileBuilderScope">
+              <option value="path" selected>目前路徑前綴（建議）</option>
+              <option value="origin">整個網域</option>
+            </select>
+          </div>
+          <div>
+            <label>候選門檻</label>
+            <select id="profileBuilderScore">
+              <option value="70">70 · 寬鬆</option>
+              <option value="80" selected>80 · 建議</option>
+              <option value="90">90 · 嚴格</option>
+            </select>
+          </div>
+        </div>
+        <label>Profile priority</label>
+        <input id="profileBuilderPriority" type="number" min="-10000" max="10000" value="250" />
+        <div class="builder-summary">
+          <div><span>草稿</span><b id="profileBuilderDraftMeta">—</b></div>
+          <div><span>能力</span><b id="profileBuilderCaps">—</b></div>
+          <div><span>selector</span><b id="profileBuilderSelectorCount">0</b></div>
+          <div><span>乾跑</span><b id="profileBuilderValidation">尚未驗證</b></div>
+        </div>
+        <div id="profileBuilderWarnings" class="profile-conflict">先按「掃描產生草稿」。</div>
+        <div id="profileBuilderSelectorList" class="builder-selector-list"><div class="timeline-empty">尚無 Profile 草稿</div></div>
+        <div class="button-row compact">
+          <button id="profileBuilderScanBtn" class="primary small-flex">掃描產生草稿</button>
+          <button id="profileBuilderValidateBtn" class="ghost small-flex" disabled>乾跑驗證</button>
+        </div>
+        <div class="button-row compact">
+          <button id="profileBuilderInstallBtn" class="success small-flex" disabled>安裝通過草稿</button>
+          <button id="profileBuilderExportBtn" class="ghost small-flex" disabled>下載草稿</button>
+          <button id="profileBuilderResetBtn" class="danger-lite">清除草稿</button>
+        </div>
+      </div>
+
+
+
+      <div class="profile-lab-box">
+        <div class="timeline-head"><span>Profile 驗證實驗室</span><small id="profileLabState">0 案例</small></div>
+        <p class="hint">把目前頁面保存成去識別化測試案例。未來 Profile 更新後可離線重跑，確認購買、售完、Queue、登入、CAPTCHA/OTP 與付款停手沒有退步。案例不保存表單值、密碼、完整 URL 或可執行程式碼。</p>
+        <label>測試 Profile</label>
+        <div class="inline">
+          <select id="profileLabProfileSelect"><option value="">尚無 Profile</option></select>
+          <button id="profileLabRefreshBtn" class="mini">更新</button>
+        </div>
+        <div class="grid2">
+          <div>
+            <label>預期頁面狀態</label>
+            <select id="profileLabExpected">
+              <option value="purchase" selected>可購買 / 可下一步</option>
+              <option value="sold">售完</option>
+              <option value="queue">官方 Queue</option>
+              <option value="login">登入頁</option>
+              <option value="captcha">CAPTCHA</option>
+              <option value="otp">OTP 驗證</option>
+              <option value="final">最後付款 / 確認</option>
+              <option value="neutral">一般頁面 / 無阻擋</option>
+            </select>
+          </div>
+          <div>
+            <label>案例名稱</label>
+            <input id="profileLabCaseName" placeholder="例如：A區可購買" autocomplete="off" />
+          </div>
+        </div>
+        <div class="button-row compact">
+          <button id="profileLabCaptureBtn" class="primary small-flex">擷取目前頁面</button>
+          <button id="profileLabRunBtn" class="ghost small-flex">執行選取</button>
+          <button id="profileLabRunAllBtn" class="ghost small-flex">執行全部</button>
+        </div>
+        <label>已保存案例</label>
+        <select id="profileLabCaseSelect"><option value="">尚無案例</option></select>
+        <div id="profileLabMeta" class="profile-state">尚未建立測試案例</div>
+        <div id="profileLabResults" class="profile-lab-results"><div class="timeline-empty">擷取案例後可離線重跑 Profile</div></div>
+        <div class="button-row compact">
+          <button id="profileLabDeleteBtn" class="danger-lite" disabled>刪除選取案例</button>
+          <button id="profileLabExportBtn" class="ghost small-flex">匯出測試包</button>
+          <label class="file-btn ghost small-flex">匯入測試包<input id="profileLabImportFile" type="file" accept="application/json" hidden /></label>
+        </div>
+      </div>
+
+      <div class="button-row compact">
+        <button id="exportPlatformProfileTemplateBtn" class="ghost small-flex">下載 Profile 範本</button>
+        <label class="file-btn ghost small-flex">匯入 Profile<input id="platformProfileImportFile" type="file" accept="application/json" hidden /></label>
+        <button id="exportPlatformProfileBtn" class="ghost small-flex" disabled>匯出選取 Profile</button>
+      </div>
+      <div class="button-row compact">
+        <button id="togglePlatformProfileBtn" class="ghost small-flex" disabled>停用 / 啟用</button>
+        <button id="deletePlatformProfileBtn" class="danger-lite" disabled>刪除 Profile</button>
+      </div>
+      <div class="rule-backup-box">
+        <div class="timeline-head"><span>Profile 版本保險箱</span><small id="platformProfileBackupCount">0 備份</small></div>
+        <select id="platformProfileBackupSelect"><option value="">尚無 Profile 備份</option></select>
+        <div class="button-row compact">
+          <button id="restorePlatformProfileBackupBtn" class="ghost small-flex" disabled>回復選取版本</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="card platform-compat-card">
+      <div class="section-head">
+        <h2>5A. 平台相容性中心 <span class="badge">1.0</span></h2>
+        <button id="platformCompatRefreshBtn" class="mini">檢查目前平台</button>
+      </div>
+      <div id="platformCompatState" class="profile-state">等待目標網址</div>
+      <div class="platform-compat-grid">
+        <div><span>目前平台</span><b id="platformCompatName">—</b></div>
+        <div><span>驗證層級</span><b id="platformCompatLevel">—</b></div>
+        <div><span>公開流程</span><b id="platformCompatPhases">—</b></div>
+        <div><span>裝置提醒</span><b id="platformCompatMobile">—</b></div>
+      </div>
+      <p class="hint strong">這裡顯示公開流程建模與安全狀態辨識，不代表平台官方背書或保證成功。真實活動頁沒有完成不送單乾跑前，不會標示「已驗證」。</p>
+      <div id="platformCompatCatalog" class="platform-compat-list"><div class="timeline-empty">載入平台 Catalog 中…</div></div>
+      <div class="profile-lab-box platform-regression-box">
+        <div class="timeline-head"><span>公開案例回歸庫</span><small id="platformRegressionCount">0 案例</small></div>
+        <div id="platformRegressionList" class="platform-regression-list"><div class="timeline-empty">載入中…</div></div>
+      </div>
+      <p class="hint">設計原則：UNKNOWN fail-closed；CAPTCHA / OTP / Login / Queue / 3D Secure 等需要真人驗證時停手；跨裝置同步設定，但同一任務只允許一台 Active。</p>
+    </section>
+
+    <section class="card rule-card">
+      <div class="section-head">
+        <h2>6. 網站規則引擎 <span class="badge">1.0</span></h2>
+        <span id="ruleCountBadge" class="rule-count">0 專用</span>
+      </div>
+      <div id="ruleState" class="profile-state">通用辨識</div>
+      <p class="hint">專用規則只描述 selector / 文字與適用網域，不會執行下載來的 JavaScript。專用規則失效時會自動回退到網站設定檔，再回退通用辨識。</p>
+      <label>規則模式</label>
+      <select id="ruleMode">
+        <option value="auto" selected>自動：專用規則優先，失效則回退</option>
+        <option value="generic">只使用通用辨識</option>
+      </select>
+      <div class="button-row compact">
+        <button id="exportRuleTemplateBtn" class="ghost small-flex">下載規則範本</button>
+        <label class="file-btn ghost small-flex">匯入專用規則<input id="ruleImportFile" type="file" accept="application/json" hidden /></label>
+        <button id="deleteRuleBtn" class="danger-lite">移除目前規則</button>
+      </div>
+      <div class="rule-backup-box">
+        <div class="timeline-head"><span>規則版本保險箱</span><small id="ruleBackupCount">0 備份</small></div>
+        <select id="ruleBackupSelect"><option value="">尚無規則備份</option></select>
+        <div class="button-row compact">
+          <button id="backupCurrentRuleBtn" class="ghost small-flex">備份目前規則</button>
+          <button id="restoreRuleBackupBtn" class="ghost small-flex" disabled>回復選取版本</button>
+        </div>
+      </div>
+    </section>
+
+
+
+    <section class="card debug-card">
+      <div class="section-head">
+        <h2>7. 網站除錯工作台 <span class="badge">1.0</span></h2>
+        <button id="debugScanBtn" class="mini">掃描目前頁面</button>
+      </div>
+      <p class="hint strong">網站改版或辨識失準時，用這裡找出候選按鈕與 selector。只分析目前頁面，不會自動點擊。</p>
+      <div class="debug-overview">
+        <div><span>DOM 指紋</span><b id="debugFingerprint">尚未掃描</b></div>
+        <div><span>與上次相比</span><b id="debugDelta">尚無基準</b></div>
+      </div>
+      <div id="debugSignals" class="debug-signals"><span class="debug-chip neutral">尚未掃描</span></div>
+      <div class="timeline-head"><span>專用規則 selector 狀態</span><small id="debugRuleSummary">—</small></div>
+      <div id="debugRuleList" class="debug-rule-list"><div class="timeline-empty">掃描後會列出失效或正常的 selector</div></div>
+      <div class="debug-toolbar">
+        <label>候選類型
+          <select id="debugKindFilter">
+            <option value="all">全部</option>
+            <option value="purchase">購買 / 下一步</option>
+            <option value="quantity">數量</option>
+            <option value="price">價格</option>
+            <option value="sold">售完</option>
+            <option value="final">付款 / 最終確認</option>
+            <option value="login">登入</option>
+            <option value="queue">Queue</option>
+            <option value="captcha">CAPTCHA</option>
+            <option value="otp">OTP</option>
+          </select>
+        </label>
+        <button id="exportRepairDraftBtn" class="ghost" disabled>下載修復草稿</button>
+      </div>
+      <div id="debugCandidateList" class="debug-candidate-list"><div class="timeline-empty">尚未掃描候選元素</div></div>
+      <p class="hint">「套用」只會填入手動 selector 欄位，不會修改專用規則檔；修復草稿也只是 JSON 草稿，仍可先檢查後再匯入。</p>
+    </section>
+
+    <section class="card">
+      <h2>8. 順位</h2>
+      <label>票區 / 規格 / 商品順位</label>
+      <textarea id="priorities" rows="4" placeholder="每行一個，例如：\nA區 3880\nB區 2880\nC區 1880"></textarea>
+      <p class="hint">由上到下尋找第一個可用項目；售完會跳下一順位。</p>
+    </section>
+
+    <section class="card">
+      <h2>9. 網頁對應 <span class="badge">進階</span></h2>
+      <p class="hint strong">一般網站可先留白讓助手自動判斷；若網站版面特殊，再用「點選」鎖定元素會更準。</p>
+
+      <label>購買 / 下一步按鈕</label>
+      <div class="inline">
+        <input id="purchaseSelector" placeholder="CSS selector（選填）" />
+        <button class="mini pick" data-target="purchaseSelector">點選</button>
+      </div>
+
+      <label>數量欄位</label>
+      <div class="inline">
+        <input id="quantitySelector" placeholder="CSS selector（選填）" />
+        <button class="mini pick" data-target="quantitySelector">點選</button>
+      </div>
+
+      <label>價格欄位</label>
+      <div class="inline">
+        <input id="priceSelector" placeholder="設了價格上限時建議指定" />
+        <button class="mini pick" data-target="priceSelector">點選</button>
+      </div>
+
+
+    </section>
+
+    <section class="card">
+      <h2>10. 一般資料自動填寫</h2>
+      <p class="hint strong">只建議存姓名、Email、電話、地址。不要在此存密碼、身分證字號、OTP 或信用卡資料。</p>
+      <label>姓名</label><input id="profileName" autocomplete="off" />
+      <label>Email</label><input id="profileEmail" type="email" autocomplete="off" />
+      <label>電話</label><input id="profilePhone" autocomplete="off" />
+      <label>地址</label><input id="profileAddress" autocomplete="off" />
+    </section>
+
+
+    <section class="card stability-card">
+      <div class="section-head">
+        <h2>11. 穩定性與災難復原 <span class="badge">1.0</span></h2>
+        <span id="systemHealthBadge" class="rule-count">尚未檢查</span>
+      </div>
+      <p class="hint strong">檢查本機資料結構、舊版遷移與規則完整性。安全備份 / 支援包不會匯出姓名、Email、電話、地址、密碼、OTP 或付款資料。</p>
+      <div class="stability-grid">
+        <div><span>資料結構</span><b id="schemaState">Schema 3</b></div>
+        <div><span>一致性</span><b id="consistencyState">尚未檢查</b></div>
+        <div><span>Storage 使用量</span><b id="storageUsageText">計算中…</b></div>
+        <div><span>背景維護</span><b id="maintenanceState">尚未執行</b></div>
+        <div><span>任務封存</span><b id="archiveCountText">0 / 30</b></div>
+        <div><span>最近安全備份</span><b id="lastBackupText">尚未備份</b></div>
+      </div>
+      <div class="button-row compact">
+        <button id="integrityCheckBtn" class="ghost small-flex">檢查一致性</button>
+        <button id="safeRepairBtn" class="ghost small-flex">安全修復</button>
+      </div>
+      <div class="button-row compact">
+        <button id="createRecoveryBtn" class="ghost small-flex">建立修復前復原點</button>
+        <button id="restoreRecoveryBtn" class="ghost small-flex" disabled>回復最近復原點</button>
+        <span id="recoveryCountText" class="rule-count neutral">0 / 3</span>
+      </div>
+      <div class="button-row compact">
+        <button id="exportSafeBackupBtn" class="primary small-flex">下載安全備份</button>
+        <label class="file-btn ghost small-flex">匯入 / 合併備份<input id="safeBackupImportFile" type="file" accept="application/json" hidden /></label>
+        <button id="exportSupportBundleBtn" class="ghost small-flex">下載支援包</button>
+      </div>
+      <div id="integrityResult" class="preflight-box"><div class="preflight-empty">尚未執行資料一致性檢查</div></div>
+    </section>
+
+
+    <section class="card stability-card sync-card">
+      <div class="section-head">
+        <h2>12. 跨裝置同步核心 <span class="badge">1.0</span></h2>
+        <span id="syncStateBadge" class="rule-count neutral">本機模式</span>
+      </div>
+      <p class="hint strong">Windows、iPhone、iPad 共用的 local-first 資料模型。只同步 Profile、規則、網站設定與測試案例；不包含姓名、Email、電話、地址、密碼、OTP、Cookie、Token、Session 或付款資料。</p>
+      <div class="stability-grid">
+        <div><span>本裝置</span><b id="syncDeviceName">未命名</b></div>
+        <div><span>Device ID</span><b id="syncDeviceId">—</b></div>
+        <div><span>Revision</span><b id="syncRevision">0</b></div>
+        <div><span>最近匯出</span><b id="syncLastExport">尚未</b></div>
+        <div><span>最近匯入</span><b id="syncLastImport">尚未</b></div>
+        <div><span>衝突</span><b id="syncConflictCount">0</b></div>
+        <div><span>最近動作</span><b id="syncLastAction">尚未</b></div>
+        <div><span>活動紀錄</span><b id="syncJournalCount">0</b></div>
+        <div><span>最近來源裝置</span><b id="syncLastRemote">—</b></div>
+      </div>
+      <label>裝置名稱</label>
+      <input id="syncDeviceNameInput" maxlength="80" placeholder="例如：公司 Windows、iPhone、iPad" />
+      <label>同步密語（不儲存）</label>
+      <input id="syncPassphrase" type="password" minlength="10" autocomplete="new-password" placeholder="至少 10 個字元；Windows / iPhone / iPad 使用同一組" />
+      <div class="button-row compact">
+        <button id="saveSyncDeviceBtn" class="ghost small-flex">儲存裝置名稱</button>
+        <button id="exportSyncBundleBtn" class="primary small-flex">匯出加密同步封包</button>
+        <label class="file-btn ghost small-flex">匯入同步封包<input id="syncImportFile" type="file" accept="application/json" hidden /></label>
+        <button id="syncClearConflictBtn" class="ghost small-flex" disabled>清除衝突紀錄</button>
+      </div>
+      <div class="subcard sync-activity-card" style="margin-top:12px">
+        <div class="section-head"><h3>最近同步活動</h3><span class="rule-count neutral">只記錄版本與時間</span></div>
+        <div id="syncActivityList" class="sync-activity-list"><div class="preflight-empty">尚無同步活動</div></div>
+      </div>
+      <div class="subcard" style="margin-top:12px">
+        <div class="section-head"><h3>零知識 Relay Provider</h3><span id="syncCloudBadge" class="rule-count neutral">未連線</span></div>
+        <p class="hint">Relay 只保存 AES-GCM 密文；同步密語仍不儲存。Endpoint / Room ID / Access Key 只留在本裝置，不會放入跨裝置資料封包。</p>
+        <label>Relay Endpoint</label>
+        <input id="syncRelayEndpoint" inputmode="url" placeholder="https://sync.example.com" />
+        <div class="stability-grid">
+          <div><span>Room ID</span><b id="syncRelayRoomPreview">—</b></div>
+          <div><span>最近雲端同步</span><b id="syncCloudLast">尚未</b></div>
+        </div>
+        <label>Room ID</label>
+        <input id="syncRelayRoom" autocomplete="off" placeholder="至少 16 字元" />
+        <label>Relay Access Key（本機保存，不會同步）</label>
+        <input id="syncRelayKey" type="password" autocomplete="new-password" placeholder="至少 24 字元" />
+        <div class="button-row compact">
+          <button id="syncRelayGenerateBtn" class="ghost small-flex">產生 Room / Key</button>
+          <button id="syncRelaySaveBtn" class="ghost small-flex">儲存 Relay</button>
+          <button id="syncRelayTestBtn" class="ghost small-flex">測試連線</button>
+        </div>
+        <div class="button-row compact">
+          <button id="syncCloudPullBtn" class="ghost small-flex">從雲端 Pull</button>
+          <button id="syncCloudPushBtn" class="primary small-flex">加密 Push 到雲端</button>
+        </div>
+      </div>
+      <div id="syncStatusBox" class="preflight-box"><div class="preflight-empty">Local-first 已啟用；可使用加密檔交換，或設定零知識 Relay 進行跨裝置 Push / Pull。</div></div>
+    </section>
+
+    <section class="card archive-card">
+      <div class="section-head">
+        <h2>13. 任務自動封存 <span class="badge">1.0</span></h2>
+        <button id="refreshArchivesBtn" class="mini">更新</button>
+      </div>
+      <p class="hint">每次正常停止、切換新任務或關閉目標分頁都會自動保存一份不含個資的執行紀錄，最多 30 次。</p>
+      <select id="archiveSelect"><option value="">尚無封存紀錄</option></select>
+      <div id="archiveMeta" class="profile-state">尚未選取封存</div>
+      <div class="button-row compact">
+        <button id="exportArchiveBtn" class="ghost small-flex" disabled>匯出選取封存</button>
+        <button id="deleteArchiveBtn" class="danger-lite" disabled>刪除選取封存</button>
+      </div>
+    </section>
+
+    <section class="card stability-card rc-card">
+      <div class="section-head">
+        <h2>14. 正式版自我檢測 <span class="badge">1.0</span></h2>
+        <span id="rcSelfTestBadge" class="rule-count">尚未檢測</span>
+      </div>
+      <p class="hint strong">這組檢測會驗證 QuickBuy 本體、真實擴充功能執行環境、背景 Service Worker、套件 SHA-256、Storage 容量與本機資料安全；不會購買、不會點售票頁，也不會要求 CAPTCHA / OTP。任何阻斷項目失敗都不要進行實站驗收。</p>
+      <div class="stability-grid">
+        <div><span>正式版狀態</span><b id="rcStateText">尚未檢測</b></div>
+        <div><span>阻斷問題</span><b id="rcBlockerCount">—</b></div>
+        <div><span>警告</span><b id="rcWarningCount">—</b></div>
+        <div><span>最近檢測</span><b id="rcLastRunText">尚未執行</b></div>
+      </div>
+      <div class="button-row compact">
+        <button id="releaseSelfTestBtn" class="primary small-flex">執行完整自我檢測</button>
+        <button id="exportSelfTestBtn" class="ghost small-flex" disabled>下載自檢報告</button>
+      </div>
+      <div id="releaseSelfTestResult" class="preflight-box"><div class="preflight-empty">尚未執行正式版自我檢測</div></div>
+    </section>
+
+    <section class="card guard-card">
+      <h2>安全邊界</h2>
+      <ul>
+        <li>CAPTCHA /「我不是機器人」：一定停下來叫你處理。</li>
+        <li>簡訊或 Email OTP：一定停下來叫你輸入。</li>
+        <li>正式模式：付款 / 最終下單按鈕一定停止，由使用者最後確認。</li>
+        <li>不繞過排隊、反機器人或網站安全機制。</li>
+        <li>只允許一個目標分頁執行；切換網站網域會自動暫停。</li>
+        <li>登入密碼頁會停住讓你本人登入；官方排隊頁只等待，不繞過 Queue。</li>
+        <li>操作有節流保護：最低點擊間隔 + 10 秒內最多 8 次，自動避免失控連點。</li>
+        <li>不自動重新整理售票頁，避免誤傷網站排隊 / 庫存流程。</li>
+      </ul>
+    </section>
+
+    <section class="card replay-card">
+      <div class="section-head">
+        <h2>實戰事件回放 <span class="badge">1.0</span></h2>
+        <button id="refreshReplayBtn" class="mini">更新</button>
+      </div>
+      <p class="hint">把狀態切換、頁面階段、網路探測與重要操作合併成時間軸，方便搶完後找出卡在哪一步。</p>
+      <div id="replaySummary" class="replay-summary">尚無本次任務事件</div>
+      <div id="replayTimeline" class="replay-timeline"><div class="timeline-empty">啟動任務後會開始記錄</div></div>
+      <div class="button-row compact">
+        <button id="exportReplayBtn" class="ghost">下載本次回放 JSON</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="section-head">
+        <h2>執行紀錄</h2>
+        <button id="clearLogBtn" class="mini">清除</button>
+      </div>
+      <div id="logBox" class="logbox"><div class="log empty">尚無紀錄</div></div>
+      <div class="button-row compact">
+        <button id="exportBtn" class="ghost">匯出安全設定</button>
+        <button id="exportReportBtn" class="ghost">匯出診斷報告</button>
+        <label class="file-btn ghost">匯入設定<input id="importFile" type="file" accept="application/json" hidden /></label>
+      </div>
+    </section>
+  </main>
+
+  <div id="dataCenterModal" class="guide-modal" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="dataCenterTitle">
+    <div class="guide-shell data-center-shell">
+      <button id="dataCenterCloseBtn" class="guide-close" aria-label="關閉">×</button>
+      <div class="guide-eyebrow">QUICKBUY 資料中心</div>
+      <h2 id="dataCenterTitle">備份、還原與自我檢查</h2>
+      <p class="guide-lead">把重要操作集中在這裡。安全備份與診斷包會排除姓名、Email、電話、地址、密碼、OTP、Cookie、Token 與付款資料；1.0 安全備份與復原點另加 SHA-256 完整性驗證。</p>
+      <div class="data-center-summary">
+        <div><span>安裝狀態</span><b id="dataInstallSummary">尚未檢查</b></div>
+        <div><span>最近安全備份</span><b id="dataBackupSummary">尚未備份</b></div>
+        <div><span>備份 SHA-256</span><b id="dataBackupFingerprint">尚未建立</b></div>
+        <div><span>最近復原點</span><b id="dataRecoverySummary">尚未建立</b></div>
+      </div>
+      <div id="dataCenterHealth" class="guide-health" hidden aria-live="polite"></div>
+      <div class="data-center-grid">
+        <section class="data-center-card">
+          <b>① 一鍵體檢</b>
+          <p>檢查擴充功能、Side Panel、本機儲存、平台資料、內建教學與開賣提醒。</p>
+          <button id="dataRunCheckBtn" class="primary">立即體檢</button>
+        </section>
+        <section class="data-center-card">
+          <b>② 安全備份 / 還原</b>
+          <p>備份規則、Profile、快捷網站與設定；不匯出個人聯絡資料。匯入前會自動建立復原點。</p>
+          <div class="data-center-actions">
+            <button id="dataBackupBtn" class="primary">下載安全備份</button>
+            <button id="dataRestoreBtn" class="ghost">匯入 / 合併備份</button>
+            <input id="dataRestoreFile" type="file" accept="application/json,.json" hidden />
+          </div>
+        </section>
+        <section class="data-center-card">
+          <b>③ 一鍵復原</b>
+          <p>變更設定或匯入資料前可先留復原點；需要時一鍵回到最近一次安全狀態，現有個人聯絡資料不會被覆蓋。</p>
+          <div class="data-center-actions">
+            <button id="dataRecoveryCreateBtn" class="ghost">建立復原點</button>
+            <button id="dataRecoveryRestoreBtn" class="ghost" disabled>回復最近復原點</button>
+          </div>
+        </section>
+        <section class="data-center-card">
+          <b>④ 分享給家人 / 朋友</b>
+          <p>只分享快捷網站與常用平台排序，不包含帳密、付款資料或執行中的任務。</p>
+          <div class="data-center-actions">
+            <button id="dataFamilyExportBtn" class="primary">建立分享包</button>
+            <button id="dataFamilyImportBtn" class="ghost">匯入分享包</button>
+            <input id="dataFamilyImportFile" type="file" accept="application/json,.json" hidden />
+          </div>
+        </section>
+        <section class="data-center-card">
+          <b>⑤ 遇到問題</b>
+          <p>產生去識別化支援包，方便協助排查；網址 query / hash / token 會先被清除。</p>
+          <button id="dataSupportBtn" class="ghost">下載診斷支援包</button>
+        </section>
+      </div>
+      <div id="dataCenterNotice" class="simple-notice data-center-notice" hidden role="status" aria-live="polite"></div>
+      <p class="guide-note">這裡只做資料管理與診斷，不會啟動購買流程。</p>
+    </div>
+  </div>
+
+  <div id="onboardingModal" class="guide-modal" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="onboardingTitle">
+    <div class="guide-shell welcome-shell">
+      <button id="onboardingCloseBtn" class="guide-close" aria-label="關閉">×</button>
+      <div class="guide-icon">⚡</div>
+      <div class="guide-eyebrow">QUICKBUY</div>
+      <h2 id="onboardingTitle">歡迎使用 QuickBuy</h2>
+      <p class="guide-lead">第一次使用不用研究一堆設定。常用售票平台可以直接點選開啟，不用複製網址；也可以先看圖像教學。</p>
+      <div class="onboarding-steps" aria-label="第一次使用三步驟">
+        <div><span>1</span><b>自動體檢</b><small>確認安裝正常</small></div>
+        <div><span>2</span><b>選平台</b><small>一鍵開官方網站</small></div>
+        <div><span>3</span><b>開始待命</b><small>需要你時才提醒</small></div>
+      </div>
+      <div class="guide-choice-grid">
+        <button id="onboardingStartBtn" class="primary guide-primary">推薦模式：直接開始</button>
+        <button id="onboardingCheckBtn" class="ghost">先檢查安裝是否正常</button>
+        <button id="onboardingQuickBtn" class="ghost">查看快速開始教學</button>
+        <button id="onboardingInstallBtn" class="ghost">查看安裝教學</button>
+        <button id="onboardingImportBtn" class="ghost">匯入家人 / 朋友分享包</button>
+        <input id="onboardingImportFile" type="file" accept="application/json,.json" hidden />
+      </div>
+      <div id="onboardingHealth" class="guide-health" hidden aria-live="polite"></div>
+      <label class="guide-check"><input id="onboardingDontShow" type="checkbox" checked /> <span>下次不要再顯示新手引導</span></label>
+      <p class="guide-note">之後仍可隨時從右上角「教學」重新開啟。</p>
+    </div>
+  </div>
+
+  <div id="tutorialModal" class="guide-modal" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="tutorialTitle">
+    <div class="guide-shell tutorial-shell">
+      <div class="tutorial-head">
+        <div><div class="guide-eyebrow">QUICKBUY 使用說明</div><h2 id="tutorialTitle">快速開始</h2></div>
+        <button id="tutorialCloseBtn" class="guide-close inline-close" aria-label="關閉">×</button>
+      </div>
+      <div class="tutorial-tabs" role="tablist">
+        <button id="tutorialInstallTab" class="mini" role="tab">① 安裝與載入</button>
+        <button id="tutorialQuickTab" class="mini" role="tab">② 快速開始</button>
+        <button id="tutorialShareTab" class="mini" role="tab">③ 分享與還原</button>
+      </div>
+      <div id="tutorialImageWrap" class="tutorial-image-wrap">
+        <div id="tutorialImage" class="tutorial-text" role="note">選平台 → 設數量／規格／開賣時間 → 開始準備。登入、驗證、排隊、付款與最後確認請由你完成。</div>
+      </div>
+      <div id="tutorialSharePanel" class="tutorial-share-panel" hidden>
+        <div class="tutorial-share-card"><b>分享給家人 / 朋友</b><p>只分享快捷網站與常用平台排序，不包含帳號、密碼、付款資料、Cookie、Token 或執行中的任務。</p><button id="tutorialFamilyExportBtn" class="primary">建立安全分享包</button></div>
+        <div class="tutorial-share-card"><b>收到分享包</b><p>匯入後會安全合併快捷網站；不會覆蓋你的登入資料，也不會關掉第一次使用教學。</p><button id="tutorialFamilyImportBtn" class="ghost">匯入分享包</button><input id="tutorialFamilyImportFile" type="file" accept="application/json,.json" hidden /></div>
+        <div class="tutorial-share-card"><b>遇到問題</b><p>可以產生去識別化診斷包，再傳給協助你的人查看。診斷匯出會移除個資與網址敏感參數。</p><button id="tutorialSupportBtn" class="ghost">產生診斷包</button></div>
+      </div>
+      <div class="tutorial-actions">
+        <button id="tutorialPrevBtn" class="ghost">上一頁</button>
+        <span id="tutorialPageText">2 / 2</span>
+        <button id="tutorialNextBtn" class="ghost">下一頁</button>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <span>QuickBuy 1.0</span>
+    <span>Local-first · 同步需手動啟用</span>
+  </footer>
+  <script src="rules.js"></script>
+  <script src="profiles.js"></script>
+  <script src="platform-catalog.js"></script>
+  <script src="sync-core.js"></script>
+  <script src="sync-crypto.js"></script>
+  <script src="sync-provider.js"></script>
+  <script src="sidepanel.js"></script>
+</body>
+</html>
